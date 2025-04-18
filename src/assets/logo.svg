@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 160" width="100%" height="100%">
+  <!-- Background Elements -->
+  <circle cx="85" cy="80" r="65" fill="#03256C" />
+  <polygon points="85,30 105,60 125,50 130,80 105,110 65,110 40,80 45,50 65,60" fill="#2541B2" />
+  
+  <!-- Quiz Symbol -->
+  <path d="M75 55 Q85 40 95 55 L95 85 Q85 100 75 85 Z" fill="#06BEE1" stroke="#FFFFFF" stroke-width="3" />
+  <circle cx="85" cy="65" r="6" fill="#FFFFFF" />
+  <path d="M70 95 L100 95" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" />
+  
+  <!-- Text ICCT -->
+  <text x="170" y="75" font-family="Arial, sans-serif" font-weight="900" font-size="40" letter-spacing="1" fill="#03256C">ICCT</text>
+  
+  <!-- Text QuizBee -->
+  <text x="170" y="115" font-family="Arial, sans-serif" font-weight="700" font-size="45" letter-spacing="-1" fill="#1768AC">
+    <tspan fill="#1768AC">Quiz</tspan><tspan fill="#06BEE1">Bee</tspan>
+  </text>
+  
+  <!-- Bee Elements -->
+  <g transform="translate(410, 80) scale(0.7) rotate(10)">
+    <ellipse cx="0" cy="0" rx="30" ry="20" fill="#06BEE1" />
+    <ellipse cx="-5" cy="-10" rx="12" ry="10" fill="#FFFFFF" opacity="0.6" />
+    <path d="M-20 -5 L-35 -15 M-20 5 L-35 15" stroke="#03256C" stroke-width="3" />
+    <path d="M15 0 L40 0 M25 -10 L35 -20 M25 10 L35 20" stroke="#03256C" stroke-width="3" />
+    <circle cx="10" cy="-7" r="4" fill="#03256C" />
+    <circle cx="10" cy="7" r="4" fill="#03256C" />
+  </g>
+  
+  <!-- Lines -->
+  <path d="M310 40 Q 340 40, 340 65 Q 340 85, 370 90" stroke="#06BEE1" stroke-width="4" fill="none" />
+  <path d="M170 85 L 320 85" stroke="#2541B2" stroke-width="2" fill="none" opacity="0.3" />
+</svg>

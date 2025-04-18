@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="100%" height="100%">
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#03256C" />
+      <stop offset="100%" stop-color="#1768AC" />
+    </linearGradient>
+    
+    <!-- Pattern definition -->
+    <pattern id="dot-pattern" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+      <circle cx="20" cy="20" r="2" fill="#FFFFFF" fill-opacity="0.15" />
+    </pattern>
+    
+    <!-- Floating shapes filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
+      <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="glow" />
+      <feComposite in="SourceGraphic" in2="glow" operator="over" />
+    </filter>
+  </defs>
+  
+  <!-- Main background -->
+  <rect width="100%" height="100%" fill="url(#bg-gradient)" />
+  
+  <!-- Pattern overlay -->
+  <rect width="100%" height="100%" fill="url(#dot-pattern)" />
+  
+  <!-- Abstract wave shapes -->
+  <path d="M0,160 C320,300 420,0 640,100 C880,210 1200,80 1440,180 L1440,900 L0,900 Z" 
+        fill="#2541B2" fill-opacity="0.3" />
+  
+  <path d="M0,450 C140,500 250,350 380,450 C550,580 730,450 950,480 C1150,510 1350,480 1440,520 L1440,900 L0,900 Z" 
+        fill="#1768AC" fill-opacity="0.4" />
+  
+  <path d="M0,700 C200,675 350,750 550,725 C750,700 950,750 1200,675 C1300,650 1400,675 1440,700 L1440,900 L0,900 Z" 
+        fill="#06BEE1" fill-opacity="0.3" />
+  
+  <!-- Floating geometric elements -->
+  <g filter="url(#glow)">
+    <!-- Circles -->
+    <circle cx="200" cy="200" r="50" fill="#06BEE1" fill-opacity="0.2" />
+    <circle cx="1200" cy="600" r="80" fill="#06BEE1" fill-opacity="0.2" />
+    <circle cx="800" cy="200" r="30" fill="#FFFFFF" fill-opacity="0.2" />
+    
+    <!-- Hexagons -->
+    <polygon points="150,650 180,700 150,750 100,750 70,700 100,650" fill="#FFFFFF" fill-opacity="0.1" />
+    <polygon points="1050,250 1100,280 1100,340 1050,370 1000,340 1000,280" fill="#FFFFFF" fill-opacity="0.1" />
+    
+    <!-- Squares -->
+    <rect x="600" y="500" width="60" height="60" transform="rotate(45, 630, 530)" fill="#06BEE1" fill-opacity="0.2" />
+    <rect x="400" y="300" width="40" height="40" transform="rotate(30, 420, 320)" fill="#FFFFFF" fill-opacity="0.2" />
+    <rect x="900" y="700" width="50" height="50" transform="rotate(15, 925, 725)" fill="#FFFFFF" fill-opacity="0.1" />
+  </g>
+</svg> 

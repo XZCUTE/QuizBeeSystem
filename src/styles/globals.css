@@ -1,0 +1,554 @@
+@import './theme.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Button Styles */
+.btn-shadow {
+  box-shadow: rgba(0, 0, 0, 0.25) 0px -4px inset;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-shadow::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.btn-shadow:hover::after {
+  width: 300%;
+  height: 300%;
+}
+
+.btn-shadow span {
+  display: block;
+  transform: translateY(-2px);
+  transition: transform var(--transition-fast);
+  position: relative;
+  z-index: 2;
+}
+
+.btn-shadow:hover {
+  box-shadow: rgba(0, 0, 0, 0.25) 0px -2px inset;
+}
+
+.btn-shadow:hover span {
+  transform: translateY(0);
+}
+
+.btn-shadow:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.text-outline {
+  -webkit-text-stroke: 2px rgba(0, 0, 0, 0.25);
+}
+
+.shadow-inset {
+  box-shadow: rgba(0, 0, 0, 0.25) 0px -4px inset;
+}
+
+/* New Wave Animation */
+@keyframes wave {
+  0% {
+    border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+    transform: translateX(-50%) rotate(0deg) translateY(10px);
+  }
+  50% {
+    border-radius: 70% 30% 30% 70% / 70% 70% 30% 30%;
+    transform: translateX(-30%) rotate(2deg) translateY(5px);
+  }
+  100% {
+    border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+    transform: translateX(-50%) rotate(0deg) translateY(10px);
+  }
+}
+
+/* Float Animations */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes pulse-float {
+  0% {
+    transform: scale(1) translateY(0px);
+    opacity: 0.2;
+  }
+  50% {
+    transform: scale(1.05) translateY(-15px);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1) translateY(0px);
+    opacity: 0.2;
+  }
+}
+
+@keyframes pulse-float-reverse {
+  0% {
+    transform: scale(1) translateY(0px);
+    opacity: 0.2;
+  }
+  50% {
+    transform: scale(1.05) translateY(15px);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1) translateY(0px);
+    opacity: 0.2;
+  }
+}
+
+@keyframes pulse-float-slow {
+  0% {
+    transform: scale(1) translateY(0px) rotate(0deg);
+    opacity: 0.1;
+  }
+  50% {
+    transform: scale(1.1) translateY(-10px) rotate(5deg);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(1) translateY(0px) rotate(0deg);
+    opacity: 0.1;
+  }
+}
+
+/* Shimmer Animation */
+@keyframes shimmer-slow {
+  0% {
+    transform: translateX(-150%);
+  }
+  100% {
+    transform: translateX(150%);
+  }
+}
+
+/* Spotlight effect */
+.spotlight {
+  position: absolute;
+  height: 200%;
+  width: 200%;
+  z-index: 100;
+  background-image: radial-gradient(
+    circle,
+    transparent 180px,
+    rgba(3, 37, 108, 0.6) 200px
+  );
+  opacity: 0;
+  left: -50%;
+  top: -50%;
+  transition: all 0.5s;
+  animation: spotlightAnim 2.5s ease-in;
+}
+
+@keyframes spotlightAnim {
+  0% {
+    left: -20%;
+    top: -20%;
+  }
+  30% {
+    opacity: 100;
+    top: -80%;
+    left: -80%;
+  }
+  60% {
+    top: -50%;
+    left: -20%;
+  }
+  80% {
+    top: -50%;
+    left: -50%;
+  }
+  98% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Animation classes */
+.anim-show {
+  animation: show 0.5s ease-out;
+}
+
+.anim-timer {
+  animation: timer 1s ease-out infinite;
+  color: var(--color-accent);
+}
+
+.anim-quizz {
+  animation: quizz 0.8s linear;
+  transform: perspective(1200px) rotateY(-15deg) rotateX(15deg) translateZ(100px);
+  box-shadow: 10px 10px 0 var(--color-primary);
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-secondary));
+  border: 2px solid var(--color-accent);
+}
+
+.anim-quizz .button {
+  box-shadow: rgba(0, 0, 0, 0.25) -4px -4px inset;
+  animation: quizzButton 0.8s ease-out;
+  background-color: var(--color-accent);
+  color: var(--color-white);
+}
+
+.anim-balanced {
+  animation: balanced 0.8s linear infinite;
+}
+
+/* Utility Animation Classes */
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-float {
+  animation: pulse-float 8s ease-in-out infinite;
+}
+
+.animate-pulse-float-reverse {
+  animation: pulse-float-reverse 9s ease-in-out infinite;
+}
+
+.animate-pulse-float-slow {
+  animation: pulse-float-slow 12s ease-in-out infinite;
+}
+
+.animate-shimmer-slow {
+  animation: shimmer-slow 3s infinite;
+}
+
+/* Glass panel effect */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* Animated Cards */
+.animated-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.animated-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-xl);
+}
+
+/* Animation Keyframes */
+@keyframes balanced {
+  0% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-10deg) translateY(-10px);
+  }
+  50% {
+    transform: rotate(0deg) translateY(0px);
+  }
+  75% {
+    transform: rotate(10deg) translateY(-10px);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes show {
+  0% {
+    transform: scale(0);
+  }
+  30% {
+    transform: scale(0.9);
+  }
+  60% {
+    transform: scale(0.8);
+  }
+  80% {
+    transform: scale(1);
+  }
+}
+
+@keyframes progressBar {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes timer {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.4) rotate(-6deg);
+  }
+  60% {
+    transform: scale(0.8) rotate(6deg);
+  }
+  80% {
+    transform: scale(1);
+  }
+}
+
+@keyframes quizz {
+  0% {
+    transform: scale(0) perspective(1200px) rotateY(-60deg) rotateX(60deg) translateZ(100px);
+  }
+  60% {
+    transform: scale(1) perspective(1200px) rotateY(-15deg) rotateX(15deg) translateZ(100px);
+  }
+  80% {
+    transform: scale(0.8) perspective(1200px) rotateY(-15deg) rotateX(15deg) translateZ(100px);
+  }
+  100% {
+    transform: scale(1) perspective(1200px) rotateY(-15deg) rotateX(15deg) translateZ(100px);
+  }
+}
+
+@keyframes quizzButton {
+  0% {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1);
+  }
+  80% {
+    transform: scale(0.8);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Primary Button Component */
+.btn-primary {
+  @apply bg-gradient-primary text-white py-3 px-6 rounded-lg font-bold shadow-md transition-all duration-300 hover:shadow-glow;
+}
+
+.btn-secondary {
+  @apply bg-gradient-secondary text-white py-3 px-6 rounded-lg font-bold shadow-md transition-all duration-300 hover:shadow-glow;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(3, 37, 108, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-accent);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
+}
+
+/* Sound Control Component Styles */
+.sound-controls {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.sound-toggle-btn {
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.sound-toggle-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
+
+.sound-controls-panel {
+  background-color: rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  width: 180px;
+  -webkit-box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  -webkit-animation: fadeIn 0.3s ease;
+  animation: fadeIn 0.3s ease;
+}
+
+.volume-control {
+  margin-bottom: 10px;
+}
+
+.volume-slider {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  background: #e0e0e0;
+  border-radius: 4px;
+  outline: none;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.mute-toggle-btn {
+  width: 100%;
+  padding: 6px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.mute-toggle-btn:hover {
+  background-color: #2563eb;
+}
+
+@-webkit-keyframes fadeIn {
+  from { opacity: 0; -webkit-transform: translateY(10px); transform: translateY(10px); }
+  to { opacity: 1; -webkit-transform: translateY(0); transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Add animations for the enhanced UI */
+@keyframes animate-gradient-x {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient-x {
+  background-size: 200% 200%;
+  animation: animate-gradient-x 3s ease infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Enhance the shadow glow effect */
+.hover\:shadow-glow:hover {
+  box-shadow: 0 0 15px 2px rgba(6, 190, 225, 0.3), 
+              0 0 30px 5px rgba(6, 190, 225, 0.2);
+  transform: translateY(-2px);
+}
+
+.shadow-glow {
+  box-shadow: 0 0 15px 2px rgba(6, 190, 225, 0.3), 
+              0 0 30px 5px rgba(6, 190, 225, 0.2);
+}
+
+/* Additional animation for floating elements */
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Animation for pulsing float */
+@keyframes pulse-float {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.2; }
+  50% { transform: translateY(-15px) scale(1.05); opacity: 0.25; }
+}
+
+.animate-pulse-float {
+  animation: pulse-float 6s ease-in-out infinite;
+}
+
+.animate-pulse-float-reverse {
+  animation: pulse-float 7s ease-in-out infinite reverse;
+}
+
+.animate-pulse-float-slow {
+  animation: pulse-float 10s ease-in-out infinite;
+}
+
+/* Animation for wave effect */
+@keyframes wave {
+  0% { transform: translateX(-50%) rotate(0deg) translateY(0); }
+  50% { transform: translateX(-48%) rotate(2deg) translateY(-15px); }
+  100% { transform: translateX(-50%) rotate(0deg) translateY(0); }
+}
+
+/* Animation for shimmer effect */
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+.animate-shimmer-slow {
+  animation: shimmer 3s infinite;
+}

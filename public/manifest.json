@@ -1,0 +1,16 @@
+{
+  "name": "ICCT Quiz Bee System",
+  "short_name": "ICCT QuizBee",
+  "background_color": "#03256C",
+  "theme_color": "#03256C",
+  "display": "standalone",
+  "start_url": "/",
+  "description": "A modern quiz bee system for ICCT",
+  "icons": [
+    {
+      "src": "/ICCTLOGO/ICCTLOGO.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}
