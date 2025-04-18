@@ -5,12 +5,14 @@ import { useNavigate } from "react-router-dom";
 import Button from "@/components/Button";
 import QuizQuestion from "./QuizQuestion";
 import Leaderboard from "./Leaderboard";
+import EnhancedLeaderboard from "./EnhancedLeaderboard";
 import ParticipantMonitor from "./ParticipantMonitor";
 import WinnerCelebration from "./WinnerCelebration";
 import TieBreakerStats from "./TieBreakerStats";
+import TiedParticipants from "./TiedParticipants";
 import toast from "react-hot-toast";
 import Countdown from './Countdown';
-import Confetti from 'react-confetti';
+import FullScreenConfetti from '@/components/FullScreenConfetti';
 import { useAudio } from "@/contexts/AudioContext";
 
 export default function QuizController({ quizId }) {
@@ -29,6 +31,7 @@ export default function QuizController({ quizId }) {
   const [timerRunning, setTimerRunning] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const { playSound } = useAudio();
+  const [winnersLoading, setWinnersLoading] = useState(false);
 
   // Load quiz data
   useEffect(() => {
@@ -155,11 +158,23 @@ export default function QuizController({ quizId }) {
   };
   
   const handleShowWinners = () => {
-    setShowWinners(true);
+    setWinnersLoading(true);
+    
+    // Use requestAnimationFrame to ensure the UI updates before transitioning
+    requestAnimationFrame(() => {
+      setShowWinners(true);
+      setTimeout(() => setWinnersLoading(false), 100);
+    });
   };
   
   const handleBackToQuiz = () => {
-    setShowWinners(false);
+    console.log("Returning to quiz results from winners view");
+    try {
+      setShowWinners(false);
+    } catch (err) {
+      console.error("Error returning from winners view:", err);
+      toast.error("Failed to return to results. Please refresh the page.");
+    }
   };
 
   const handleEndQuiz = async () => {
@@ -269,16 +284,17 @@ export default function QuizController({ quizId }) {
     return (
       <div className="p-4 max-w-4xl mx-auto">
         {showConfetti && (
-          <Confetti
-            width={window.innerWidth}
-            height={window.innerHeight}
+          <FullScreenConfetti 
+            active={true} 
+            pieces={400}
             recycle={true}
-            numberOfPieces={200}
-            colors={['#03256C', '#2541B2', '#1768AC', '#06BEE1', '#FFFFFF', '#FFD700']}
           />
         )}
         {showWinners ? (
-          <WinnerCelebration quizId={quizId} onBack={handleBackToQuiz} />
+          <WinnerCelebration 
+            quizId={quizId} 
+            onBack={handleBackToQuiz} 
+          />
         ) : (
           <>
             <h2 className="text-2xl font-bold text-primary mb-6 text-center">Quiz Results</h2>
@@ -299,7 +315,7 @@ export default function QuizController({ quizId }) {
                 onClick={handleToggleTieBreakers} 
                 className={showTieBreakerStats ? "bg-primary text-white" : ""}
               >
-                Tie-Breakers
+                Tie-Breakers & Tied Scores
               </Button>
             </div>
             <div className="mb-6">
@@ -308,8 +324,19 @@ export default function QuizController({ quizId }) {
                 className="bg-gradient-to-r from-primary to-secondary text-white w-full py-3 text-xl"
                 onMouseEnter={() => setShowConfetti(true)}
                 onMouseLeave={() => setShowConfetti(false)}
+                disabled={winnersLoading}
               >
-                🏆 Show Winners 🏆
+                {winnersLoading ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Loading Winners...
+                  </span>
+                ) : (
+                  <>🏆 Show Winners 🏆</>
+                )}
               </Button>
             </div>
             <div className="bg-white rounded-lg shadow-lg p-4">
@@ -343,9 +370,16 @@ export default function QuizController({ quizId }) {
               )}
               
               {/* Content based on selected view */}
-              {showLeaderboard && <Leaderboard quizId={quizId} />}
-              {showParticipants && <ParticipantMonitor quizId={quizId} teamFilter={selectedTeam} />}
-              {showTieBreakerStats && <TieBreakerStats quizId={quizId} />}
+              <div className="w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: "min(70vh, 600px)" }}>
+                {showLeaderboard && <EnhancedLeaderboard quizId={quizId} showTeams={true} animateEntrance={false} />}
+                {showParticipants && <ParticipantMonitor quizId={quizId} teamFilter={selectedTeam} />}
+                {showTieBreakerStats && <TieBreakerStats quizId={quizId} />}
+                {showTieBreakerStats && (
+                  <div className="mt-6">
+                    <TiedParticipants quizId={quizId} />
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}
@@ -363,42 +397,10 @@ export default function QuizController({ quizId }) {
           {/* Main section with question, controls, and stats */}
           <div className="bg-white rounded-b-lg shadow-lg p-4 mb-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Left sidebar for controls */}
+              {/* Left sidebar for controls - Modified to remove timer controls */}
               <div className="lg:col-span-1 bg-gray-50 rounded-lg p-4 h-full">
-                <h3 className="text-lg font-bold text-gray-700 mb-4">Quiz Controls</h3>
+                <h3 className="text-lg font-bold text-gray-700 mb-4">Controls</h3>
                 <div className="space-y-4">
-                  <div>
-                    <div className="mb-2 text-sm font-medium text-gray-600">Start Timer</div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button onClick={() => startTimer(10)} variant="timerShort">10s</Button>
-                      <Button onClick={() => startTimer(20)} variant="timerShort">20s</Button>
-                      <Button onClick={() => startTimer(30)} variant="timerMedium">30s</Button>
-                      <Button onClick={() => startTimer(60)} variant="timerLong">60s</Button>
-                      <Button onClick={() => startTimer(120)} variant="timerLong">2m</Button>
-                    </div>
-                  </div>
-                  
-                  {timerRunning && (
-                    <div className="text-center">
-                      <Button 
-                        onClick={stopTimer} 
-                        variant="danger"
-                        className="px-4 py-2 w-full"
-                      >
-                        Stop Timer
-                      </Button>
-                    </div>
-                  )}
-                  
-                  {timer && (
-                    <div className="flex justify-center">
-                      <Countdown 
-                        initialSeconds={timer} 
-                        isRunning={timerRunning} 
-                      />
-                    </div>
-                  )}
-                  
                   <div className="border-t border-gray-200 pt-4">
                     <div className="mb-2 text-sm font-medium text-gray-600">View Options</div>
                     <div className="space-y-2">
@@ -418,7 +420,7 @@ export default function QuizController({ quizId }) {
                         onClick={handleToggleTieBreakers} 
                         className={`w-full ${showTieBreakerStats ? "bg-primary text-white" : ""}`}
                       >
-                        Tie-Breakers
+                        Tie-Breakers & Tied Scores
                       </Button>
                     </div>
                   </div>
@@ -508,7 +510,7 @@ export default function QuizController({ quizId }) {
                 
                 {/* Stats and Participants */}
                 <h3 className="text-lg font-bold mb-4">
-                  {showLeaderboard ? "Leaderboard" : showParticipants ? "Participants" : "Tie-Breaker Stats"}
+                  {showLeaderboard ? "Leaderboard" : showParticipants ? "Participants" : "Tie-Breakers & Tied Scores"}
                 </h3>
                 
                 {selectedTeam && showParticipants && (
@@ -541,9 +543,16 @@ export default function QuizController({ quizId }) {
                 )}
                 
                 {/* Content based on selected view */}
-                {showLeaderboard && <Leaderboard quizId={quizId} />}
-                {showParticipants && <ParticipantMonitor quizId={quizId} teamFilter={selectedTeam} />}
-                {showTieBreakerStats && <TieBreakerStats quizId={quizId} />}
+                <div className="w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: "min(70vh, 600px)" }}>
+                  {showLeaderboard && <EnhancedLeaderboard quizId={quizId} showTeams={true} animateEntrance={false} />}
+                  {showParticipants && <ParticipantMonitor quizId={quizId} teamFilter={selectedTeam} />}
+                  {showTieBreakerStats && <TieBreakerStats quizId={quizId} />}
+                  {showTieBreakerStats && (
+                    <div className="mt-6">
+                      <TiedParticipants quizId={quizId} />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

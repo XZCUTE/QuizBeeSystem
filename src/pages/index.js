@@ -33,7 +33,7 @@ export default function Home() {
         <div className="absolute -bottom-[15vmin] -right-[15vmin] min-h-[75vmin] min-w-[75vmin] rotate-45 bg-primary/15"></div>
       </div>
 
-      <img src="/ICCTLOGO/LOGOICCT.png" className="mb-6 h-32" alt="ICCT School Logo" />
+      <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-32" alt="ICCT School Logo" />
       
       <div className="flex flex-col gap-4 w-full max-w-md px-4">
         <h1 className="text-center text-4xl font-bold text-primary mb-8">Quiz Bee System</h1>

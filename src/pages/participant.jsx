@@ -7,7 +7,8 @@ import Input from "@/components/Input"
 import Form from "@/components/Form"
 import toast from "react-hot-toast"
 import QuizQuestion from "@/components/quiz/QuizQuestion"
-import Confetti from "react-confetti"
+import EnhancedLeaderboard from "@/components/quiz/EnhancedLeaderboard"
+import FullScreenConfetti from "@/components/FullScreenConfetti"
 
 export default function Participant() {
   const navigate = useNavigate()
@@ -23,7 +24,6 @@ export default function Participant() {
   const [totalParticipants, setTotalParticipants] = useState(0)
   const [score, setScore] = useState(0)
   const [topParticipants, setTopParticipants] = useState([])
-  const [windowSize, setWindowSize] = useState({ width: 800, height: 600 })
   const [isLoaded, setIsLoaded] = useState(false)
 
   // Generate random positions for background particles
@@ -45,23 +45,12 @@ export default function Participant() {
 
   const particles = generateParticles(15);
 
-  // Set window size for confetti
+  // Simplify this useEffect to only handle the isLoaded state
   useEffect(() => {
     // Set loaded state after a small delay for entrance animation
     const timer = setTimeout(() => setIsLoaded(true), 100);
     
-    const updateSize = () => {
-      setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight
-      });
-    };
-    
-    window.addEventListener('resize', updateSize);
-    updateSize();
-    
     return () => {
-      window.removeEventListener('resize', updateSize);
       clearTimeout(timer);
     };
   }, []);
@@ -331,128 +320,100 @@ export default function Participant() {
     const percentile = Math.round(((totalParticipants - participantRank) / totalParticipants) * 100);
     
     return (
-      <div className="max-w-md mx-auto flex flex-col">
+      <div className="max-w-3xl mx-auto flex flex-col relative">
         {participantRank <= 3 && (
-          <Confetti
-            width={windowSize.width}
-            height={windowSize.height}
+          <FullScreenConfetti 
+            active={true}
+            pieces={participantRank === 1 ? 400 : participantRank === 2 ? 300 : 250}
             recycle={true}
-            numberOfPieces={participantRank === 1 ? 200 : 150}
-            colors={['#03256C', '#2541B2', '#1768AC', '#06BEE1', '#FFFFFF', '#FFD700']}
-            gravity={0.15}
           />
         )}
         
-        <img src="/ICCTLOGO/LOGOICCT.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
+        <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
         <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>Quiz Complete!</h1>
         
-        <div className="bg-white/95 backdrop-blur-sm shadow-xl rounded-xl overflow-hidden border-4 border-primary/20 transform transition-all hover:shadow-glow">
-          <div className="px-6 pt-6 pb-8 text-center">
-            {/* Animated badge */}
-            <div className="relative mb-4">
-              <div className={`${badgeColor} w-28 h-28 rounded-full mx-auto flex items-center justify-center relative overflow-hidden`}>
-                <div className="animate-pulse-slow absolute inset-0 opacity-30 bg-white"></div>
-                <span className="text-6xl relative z-10">{emoji}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Personal results card */}
+          <div className="bg-white/95 backdrop-blur-sm shadow-xl rounded-xl overflow-hidden border-4 border-primary/20 transform transition-all hover:shadow-glow">
+            <div className="px-6 pt-6 pb-8 text-center">
+              {/* Animated badge */}
+              <div className="relative mb-4">
+                <div className={`${badgeColor} w-28 h-28 rounded-full mx-auto flex items-center justify-center relative overflow-hidden`}>
+                  <div className="animate-pulse-slow absolute inset-0 opacity-30 bg-white"></div>
+                  <span className="text-6xl relative z-10">{emoji}</span>
+                </div>
+                <div className={`absolute -bottom-2 left-1/2 transform -translate-x-1/2 ${badgeColor} text-white text-xs font-bold py-1 px-3 rounded-full shadow-lg`}>
+                  {achievement}
+                </div>
               </div>
-              <div className={`absolute -bottom-2 left-1/2 transform -translate-x-1/2 ${badgeColor} text-white text-xs font-bold py-1 px-3 rounded-full shadow-lg`}>
-                {achievement}
-              </div>
-            </div>
-            
-            <h2 className="text-2xl font-bold mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">{message}</h2>
-            
-            {/* Position card */}
-            <div className="bg-primary/10 rounded-xl p-5 mt-4 relative overflow-hidden">
-              {/* Decorative corner shapes */}
-              <div className="absolute top-0 left-0 border-t-8 border-l-8 border-primary/20 w-8 h-8 rounded-tl-md"></div>
-              <div className="absolute top-0 right-0 border-t-8 border-r-8 border-primary/20 w-8 h-8 rounded-tr-md"></div>
-              <div className="absolute bottom-0 left-0 border-b-8 border-l-8 border-primary/20 w-8 h-8 rounded-bl-md"></div>
-              <div className="absolute bottom-0 right-0 border-b-8 border-r-8 border-primary/20 w-8 h-8 rounded-br-md"></div>
               
-              <div className="relative z-10">
-                <p className="text-lg font-semibold text-primary">Your Position</p>
-                <div className="flex items-center justify-center my-3">
-                  <div className="text-5xl font-bold text-primary">
-                    {participantRank}<sup className="text-lg">{getRankSuffix(participantRank)}</sup>
-                  </div>
-                  <div className="ml-3 pl-3 border-l border-gray-300 text-left">
-                    <div className="text-sm text-gray-500">out of</div>
-                    <div className="text-xl font-semibold">{totalParticipants}</div>
-                  </div>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
-                  <div 
-                    className="bg-gradient-to-r from-primary to-secondary h-2.5 rounded-full" 
-                    style={{ width: `${percentile}%` }}
-                  ></div>
-                </div>
-                <p className="text-right text-xs text-gray-500">Top {percentile}%</p>
-              </div>
-            </div>
-            
-            {/* Score card */}
-            <div className="mt-6 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl p-5">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-semibold text-gray-700">Final Score</span>
-                <span className="text-2xl font-bold text-secondary">{score}</span>
-              </div>
-              <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-3"></div>
-              {team && (
-                <div className="text-center py-1 px-3 bg-white/50 rounded-lg inline-block">
-                  <span className="text-gray-700">Team: </span>
-                  <span className="font-semibold text-primary">{team}</span>
-                </div>
-              )}
-            </div>
-            
-            {/* Top participants section */}
-            {topParticipants.length > 0 && (
-              <div className="mt-8">
-                <h3 className="text-xl font-bold mb-4 flex items-center justify-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                  Top 3 Participants
-                </h3>
-                <div className="space-y-3">
-                  {topParticipants.map((participant, index) => (
-                    <div 
-                      key={participant.id} 
-                      className={`flex justify-between items-center p-3 rounded-lg transition-all duration-300 
-                        ${participant.id === participantId 
-                          ? "bg-primary/20 border border-primary/30" 
-                          : "bg-gray-100 hover:bg-gray-200"}`}
-                      style={{
-                        transform: `scale(${1 - index * 0.05})`,
-                        opacity: 1 - index * 0.1
-                      }}
-                    >
-                      <div className="flex items-center">
-                        <div className={`w-8 h-8 flex items-center justify-center rounded-full mr-3 text-white font-bold
-                          ${index === 0 ? "bg-yellow-500" : index === 1 ? "bg-gray-400" : "bg-amber-600"}`}>
-                          {index + 1}
-                        </div>
-                        <div>
-                          <div className="font-bold flex items-center">
-                            {participant.name}
-                            {participant.id === participantId && (
-                              <span className="ml-2 text-xs bg-primary text-white px-2 py-0.5 rounded-full">You</span>
-                            )}
-                          </div>
-                          {participant.team && (
-                            <div className="text-xs text-gray-600">Team: {participant.team}</div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="font-bold text-primary flex items-center">
-                        {participant.score}
-                        <span className="text-xs ml-1">pts</span>
-                      </div>
+              <h2 className="text-2xl font-bold mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">{message}</h2>
+              
+              {/* Position card */}
+              <div className="bg-primary/10 rounded-xl p-5 mt-4 relative overflow-hidden">
+                {/* Decorative corner shapes */}
+                <div className="absolute top-0 left-0 border-t-8 border-l-8 border-primary/20 w-8 h-8 rounded-tl-md"></div>
+                <div className="absolute top-0 right-0 border-t-8 border-r-8 border-primary/20 w-8 h-8 rounded-tr-md"></div>
+                <div className="absolute bottom-0 left-0 border-b-8 border-l-8 border-primary/20 w-8 h-8 rounded-bl-md"></div>
+                <div className="absolute bottom-0 right-0 border-b-8 border-r-8 border-primary/20 w-8 h-8 rounded-br-md"></div>
+                
+                <div className="relative z-10">
+                  <p className="text-lg font-semibold text-primary">Your Position</p>
+                  <div className="flex items-center justify-center my-3">
+                    <div className="text-5xl font-bold text-primary">
+                      {participantRank}<sup className="text-lg">{getRankSuffix(participantRank)}</sup>
                     </div>
-                  ))}
+                    <div className="ml-3 pl-3 border-l border-gray-300 text-left">
+                      <div className="text-sm text-gray-500">out of</div>
+                      <div className="text-xl font-semibold">{totalParticipants}</div>
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                    <div 
+                      className="bg-gradient-to-r from-primary to-secondary h-2.5 rounded-full" 
+                      style={{ width: `${percentile}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-right text-xs text-gray-500">Top {percentile}%</p>
                 </div>
               </div>
-            )}
+              
+              {/* Score card */}
+              <div className="mt-6 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl p-5">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-semibold text-gray-700">Final Score</span>
+                  <span className="text-2xl font-bold text-secondary">{score}</span>
+                </div>
+                <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent my-3"></div>
+                {team && (
+                  <div className="text-center py-1 px-3 bg-white/50 rounded-lg inline-block">
+                    <span className="text-gray-700">Team: </span>
+                    <span className="font-semibold text-primary">{team}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Leaderboard section */}
+          <div className="h-full flex flex-col">
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 mb-4">
+              <h3 className="text-xl md:text-2xl font-bold mb-3 text-center text-primary">Leaderboard</h3>
+              
+              <div className="w-full overflow-x-auto overflow-y-auto" style={{ 
+                maxHeight: "min(70vh, 600px)"
+              }}>
+                <div className="min-w-full text-base md:text-lg">
+                  <EnhancedLeaderboard 
+                    quizId={quizCode} 
+                    participantId={participantId} 
+                    showTeams={true}
+                    animateEntrance={false}
+                    compact={false}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         
@@ -482,25 +443,22 @@ export default function Participant() {
     }
   };
 
+  // Add a new function to handle leaving quiz with confirmation
+  const handleLeaveQuiz = () => {
+    if (window.confirm("Are you sure you want to leave the quiz? This action cannot be undone.")) {
+      navigate("/");
+    }
+  };
+
   return (
     <section className="min-h-screen w-full flex flex-col items-center justify-center overflow-hidden relative">
-      {/* Animated Background */}
-      <div className="fixed inset-0 -z-10 bg-gradient-to-b from-[#03256C] to-[#06BEE1]">
-        {/* Animated waves */}
-        <div className="absolute bottom-0 left-0 right-0 h-64 overflow-hidden">
-          <div className="absolute bottom-[-10px] left-0 right-0 h-64 bg-[#06BEE1] opacity-20"
-               style={{
-                 transform: 'translateX(-50%) rotate(0deg) translateY(10px)',
-                 animation: 'wave 15s ease-in-out infinite',
-               }}
-          />
-          <div className="absolute bottom-[-15px] left-0 right-0 h-64 bg-[#1768AC] opacity-15"
-               style={{
-                 transform: 'translateX(-25%) rotate(0deg) translateY(10px)',
-                 animation: 'wave 17s ease-in-out infinite reverse',
-               }}
-          />
-        </div>
+      {/* Background Image */}
+      <div className="fixed inset-0 -z-10">
+        <img 
+          src="https://i.imgur.com/2qmTd0f.jpeg" 
+          className="w-full h-full object-cover" 
+          alt="background" 
+        />
         
         {/* Floating particles */}
         {particles.map((particle) => (
@@ -523,7 +481,7 @@ export default function Participant() {
       <div className="container mx-auto px-4 py-0 min-h-screen flex flex-col justify-center items-center">
         {step === "enter-code" && (
           <div className={`max-w-md mx-auto transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
-            <img src="/ICCTLOGO/LOGOICCT.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
+            <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
             <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>Join Quiz</h1>
             
             <Form className="bg-white/90 backdrop-blur-sm rounded-lg p-8 shadow-lg hover:shadow-glow transition-all duration-300 relative overflow-hidden">
@@ -561,7 +519,7 @@ export default function Participant() {
         
         {step === "enter-info" && (
           <div className="max-w-md mx-auto">
-            <img src="/ICCTLOGO/LOGOICCT.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
+            <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
             <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>Your Information</h1>
             
             <Form className="bg-white/90 backdrop-blur-sm rounded-lg p-8 shadow-lg hover:shadow-glow transition-all duration-300 relative overflow-hidden">
@@ -610,7 +568,7 @@ export default function Participant() {
         
         {step === "waiting" && (
           <div className="max-w-md mx-auto text-center">
-            <img src="/ICCTLOGO/LOGOICCT.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
+            <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
             <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>Waiting for Host</h1>
             
             <div className="bg-white/90 backdrop-blur-sm shadow-lg rounded-lg p-8 mb-6 transform transition-all hover:shadow-glow relative overflow-hidden">
@@ -643,7 +601,7 @@ export default function Participant() {
             </div>
             
             <Button 
-              onClick={() => navigate("/")} 
+              onClick={handleLeaveQuiz} 
               variant="secondary"
               className="bg-white/80 text-primary border-2 border-primary/50 px-6 py-3 rounded-lg font-bold shadow-md hover:bg-white hover:shadow-lg transition-all"
             >
@@ -654,7 +612,7 @@ export default function Participant() {
         
         {step === "quiz-active" && (
           <div className="max-w-3xl mx-auto w-full">
-            <img src="/ICCTLOGO/LOGOICCT.png" className="mb-4 h-20 mx-auto animate-float" alt="ICCT School Logo" />
+            <img src="https://i.imgur.com/7OSw7In.png" className="mb-4 h-20 mx-auto animate-float" alt="ICCT School Logo" />
             <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>{quiz?.title}</h1>
             
             <div className="bg-white/90 backdrop-blur-sm shadow-lg rounded-lg overflow-hidden border-4 border-primary/20 transform transition-all hover:shadow-glow">
@@ -694,7 +652,7 @@ export default function Participant() {
             
             <div className="mt-6 text-center">
               <Button 
-                onClick={() => navigate("/")} 
+                onClick={handleLeaveQuiz} 
                 variant="secondary"
                 className="bg-white/80 text-primary border-2 border-primary/50 px-6 py-3 rounded-lg font-bold shadow-md hover:bg-white hover:shadow-lg transition-all"
               >

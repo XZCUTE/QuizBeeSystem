@@ -71,11 +71,17 @@ export default function Podium({ data: { subject, top } }) {
   return (
     <>
       {apparition >= 4 && (
-        <ReactConfetti
-          width={width}
-          height={height}
-          className="h-full w-full"
-        />
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          <ReactConfetti
+            width={window.innerWidth}
+            height={window.innerHeight}
+            recycle={true}
+            numberOfPieces={400}
+            colors={['#FFD700', '#FFC107', '#06BEE1', '#2541B2', '#FFFFFF', '#FF5252', '#69F0AE']}
+            gravity={0.1}
+            opacity={0.8}
+          />
+        </div>
       )}
 
       {apparition >= 3 && top.length >= 3 && (

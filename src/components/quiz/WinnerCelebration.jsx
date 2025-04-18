@@ -1,143 +1,132 @@
 import { useState, useEffect } from "react";
-import { ref, onValue, update } from "firebase/database";
-import { db } from "@/firebase/config";
-import Button from "@/components/Button";
-import Confetti from "react-confetti";
-import { useWindowSize } from "react-use";
 import { useNavigate } from "react-router-dom";
+import { ref, onValue, update, get } from "firebase/database";
+import { db } from "@/firebase/config";
+import { FaTrophy, FaUsers } from 'react-icons/fa';
+import { toast } from 'react-hot-toast';
+import Button from "@/components/Button";
+import EnhancedLeaderboard from "./EnhancedLeaderboard";
+import FullScreenConfetti from '@/components/FullScreenConfetti';
 
 export default function WinnerCelebration({ quizId, onBack }) {
-  const [winners, setWinners] = useState([]);
+  const [topWinners, setTopWinners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { width, height } = useWindowSize();
+  const [showConfetti, setShowConfetti] = useState(true);
   const navigate = useNavigate();
 
+  // Debug logging
+  console.log("WinnerCelebration rendering with quizId:", quizId, "loading:", loading);
+
   useEffect(() => {
+    console.log("WinnerCelebration useEffect running with quizId:", quizId);
+    
     if (!quizId) {
-      console.log("WinnerCelebration: No quizId provided");
+      console.log("No quizId provided to WinnerCelebration");
       setLoading(false);
+      setError("Quiz ID is required");
       return;
     }
 
-    console.log(`WinnerCelebration: Loading winners for quiz ${quizId}`);
+    console.log("Setting up Firebase listener for quizId:", quizId);
+    
+    try {
     const participantsRef = ref(db, `quizzes/${quizId}/participants`);
     
     const unsubscribe = onValue(participantsRef, (snapshot) => {
-      try {
-        if (snapshot.exists()) {
+        console.log("Firebase onValue triggered for winners");
+        
+        // Immediately set loading to false once we get a response
+        setLoading(false);
+        
+        try {
+          if (!snapshot.exists()) {
+            console.log("No participants found");
+            setTopWinners([]);
+            return;
+          }
+          
           const participantsData = snapshot.val();
-          console.log("WinnerCelebration: Raw participant data:", participantsData);
+          console.log("Participants data:", participantsData);
           
-          // Convert to array with proper fallbacks - updated to be less aggressive
-          let participantsArray = Object.keys(participantsData).map(key => {
-            const participant = participantsData[key] || {};
-            
-            // For each participant, prioritize their stored data
-            // Only use fallbacks for completely missing data (null/undefined)
-            return {
+          // Simplified participant processing
+          let participantsArray = Object.keys(participantsData).map(key => ({
               id: key,
-              // Only use fallback if name is completely missing
-              name: participant.name !== undefined && participant.name !== null ? participant.name : "Anonymous",
-              // Only use fallback if team is completely missing
-              team: participant.team !== undefined && participant.team !== null ? participant.team : "No Team",
-              score: participant.score || 0,
-              ...participant
-            };
-          });
+            name: participantsData[key].name || "Anonymous",
+            team: participantsData[key].team || "No Team",
+            score: participantsData[key].score || 0
+          }));
           
-          // Check if any participants have truly missing name or team and update them
-          participantsArray.forEach(async (participant) => {
-            const needsNameUpdate = participantsData[participant.id].name === undefined || 
-                                   participantsData[participant.id].name === null;
-            const needsTeamUpdate = participantsData[participant.id].team === undefined || 
-                                   participantsData[participant.id].team === null;
-            
-            if (needsNameUpdate || needsTeamUpdate) {
-              // Update Firebase with the fallback values only if data is completely missing
-              const updates = {};
-              if (needsNameUpdate) {
-                updates.name = "Anonymous";
-              }
-              if (needsTeamUpdate) {
-                updates.team = "No Team";
-              }
-              
-              if (Object.keys(updates).length > 0) {
-                console.log(`Updating participant ${participant.id} with defaults:`, updates);
-                await update(ref(db, `quizzes/${quizId}/participants/${participant.id}`), updates);
-              }
-            }
-          });
+          console.log("Processed participants array:", participantsArray);
           
-          // Sort by score in descending order (highest first)
+          // Sort by score in descending order
           participantsArray.sort((a, b) => b.score - a.score);
           
-          // Take top 3 participants or less if fewer exist
-          const topWinners = participantsArray.slice(0, Math.min(3, participantsArray.length));
-          console.log("WinnerCelebration: Top winners:", topWinners);
+          // Take top 3 participants
+          const winners = participantsArray.slice(0, Math.min(3, participantsArray.length));
+          console.log(`Found ${winners.length} winners:`, winners);
           
-          setWinners(topWinners);
+          setTopWinners(winners);
           setError(null);
-        } else {
-          console.log("WinnerCelebration: No participants found");
-          setWinners([]);
+          
+        } catch (err) {
+          console.error("Error processing winners:", err);
+          setError(`Error processing results: ${err.message}`);
         }
-      } catch (err) {
-        console.error("WinnerCelebration: Error processing winners", err);
-        setError(err.message);
-        setWinners([]);
-      } finally {
+      }, (error) => {
+        // Error callback for onValue
+        console.error("Firebase onValue error:", error);
         setLoading(false);
-      }
-    }, (err) => {
-      console.error("WinnerCelebration: Firebase error", err);
-      setError(err.message);
-      setLoading(false);
-    });
+        setError(`Firebase error: ${error.message}`);
+      });
 
-    return () => unsubscribe();
+      return () => {
+        console.log("Cleaning up Firebase listener");
+        unsubscribe();
+      };
+    } catch (err) {
+      console.error("Error setting up winners listener:", err);
+      setError(`Error: ${err.message}`);
+      setLoading(false);
+    }
   }, [quizId]);
 
-  // Debug output
-  console.log("WinnerCelebration rendering. State:", { 
-    quizId, loading, winnerCount: winners.length, error 
-  });
-
   const handleGoHome = () => {
+    try {
     navigate('/');
+    } catch (err) {
+      window.location.href = '/';
+    }
   };
 
+  // Loading state
   if (loading) {
     return (
-      <div className="p-4 text-center">
+      <div className="p-6 text-center">
+        <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-20 mx-auto" alt="ICCT School Logo" />
         <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-        <p>Loading winners...</p>
+        <p className="text-xl font-bold text-primary">Loading winners...</p>
+        <p className="text-gray-500 mt-2">Please wait while we gather the results</p>
+        <Button 
+          onClick={() => setLoading(false)} 
+          variant="secondary"
+          className="mt-6"
+        >
+          Skip Loading
+        </Button>
       </div>
     );
   }
 
+  // Error state
   if (error) {
     return (
-      <div className="p-4 text-center">
-        <p className="text-red-500">Error: {error}</p>
-        <div className="flex justify-center space-x-4 mt-4">
-          <Button onClick={() => navigate('/')} variant="primary">
-            Back to Home
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (winners.length === 0) {
-    return (
-      <div className="p-4 text-center">
-        <p className="text-gray-600">No participants found</p>
+      <div className="p-6 text-center">
+        <p className="text-red-500 font-bold">Error: {error}</p>
         <div className="flex justify-center space-x-4 mt-4">
           {onBack && (
             <Button onClick={onBack} variant="secondary">
-              Back to Leaderboard
+              Back to Results
             </Button>
           )}
           <Button onClick={handleGoHome} variant="primary">
@@ -148,110 +137,120 @@ export default function WinnerCelebration({ quizId, onBack }) {
     );
   }
 
-  // First place is gold, second is silver
-  const firstPlace = winners[0];
-  const secondPlace = winners.length > 1 ? winners[1] : null;
-  const thirdPlace = winners.length > 2 ? winners[2] : null;
+  // Empty state
+  if (topWinners.length === 0) {
+    return (
+      <div className="p-6 text-center">
+        <FaTrophy className="mx-auto text-5xl text-yellow-500 mb-4" />
+        <h2 className="text-2xl font-bold mb-2">No participants found</h2>
+        <p className="text-gray-600 mb-4">
+          There are no participants with scores to display.
+        </p>
+        <div className="flex justify-center space-x-4 mt-4">
+          {onBack && (
+            <Button onClick={onBack} variant="secondary">
+              Back to Results
+            </Button>
+          )}
+          <Button onClick={handleGoHome} variant="primary">
+            Back to Home
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
+  // Main view
   return (
-    <div className="celebration p-4">
-      <Confetti width={width} height={height} recycle={false} numberOfPieces={500} />
+    <div className="winner-celebration relative">
+      {/* Full screen confetti with the same config as participant page */}
+      {showConfetti && (
+        <FullScreenConfetti 
+          active={true}
+          pieces={400}
+          recycle={true}
+        />
+      )}
       
-      <h1 className="text-4xl font-bold text-center text-blue-600 mb-8">
-        Congratulations to our Winners!
-      </h1>
+      <div className="mb-6 text-center">
+        <h2 className="text-3xl font-bold mb-2 animate-pulse text-primary">
+          🏆 Quiz Complete! 🏆
+        </h2>
+        <p className="text-xl text-gray-700">
+          Here are the top performers
+        </p>
+      </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Champion */}
-        <div className="bg-yellow-300 rounded-lg p-6 shadow-lg text-center">
-          <img 
-            src="/medals/gold.svg" 
-            alt="Gold Medal" 
-            className="w-20 h-20 mx-auto mb-4"
-            onError={(e) => {
-              console.log("Medal image failed to load, using fallback");
-              e.target.style.display = 'none';
-            }}
-          />
-          <h2 className="text-2xl font-bold mb-4">Champion</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top winners display */}
+        <div className="bg-white shadow-lg rounded-xl p-6 border-4 border-primary/20">
+          <h3 className="text-2xl font-bold mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent text-center">
+            Champions
+          </h3>
           
-          <div className="mb-4 text-lg font-semibold">
-            {firstPlace.name}
+          <div className="space-y-8">
+            {topWinners.map((winner, index) => (
+              <div key={winner.id} className="relative">
+                {/* Award icons */}
+                <div className="absolute -left-3 -top-3 w-12 h-12 flex items-center justify-center rounded-full shadow-lg z-10"
+                  style={{
+                    background: index === 0 
+                      ? 'linear-gradient(135deg, #FFD700, #FFC107)' 
+                      : index === 1 
+                        ? 'linear-gradient(135deg, #C0C0C0, #E0E0E0)' 
+                        : 'linear-gradient(135deg, #CD7F32, #B87333)'
+                  }}
+                >
+                  <span className="text-white text-xl font-bold">{index + 1}</span>
           </div>
           
-          <div className="flex justify-center items-center mb-2">
-            <span className="bg-yellow-100 px-3 py-1 rounded-full text-yellow-800">
-              {firstPlace.team}
-            </span>
-          </div>
-          
-          <div className="text-2xl font-bold">
-            {firstPlace.score} points
+                <div className={`transform transition duration-500 hover:-translate-y-1 hover:shadow-xl
+                  p-4 rounded-lg border-2
+                  ${index === 0 
+                    ? 'bg-yellow-50 border-yellow-300 shadow-yellow-100' 
+                    : index === 1 
+                      ? 'bg-gray-50 border-gray-300 shadow-gray-100' 
+                      : 'bg-amber-50 border-amber-300 shadow-amber-100'
+                  }`}
+                >
+                  <div className="relative group">
+                    <h4 className="text-xl font-bold mb-1 truncate" title={winner.name}>
+                      {winner.name}
+                    </h4>
+                    <div className="absolute left-0 -bottom-6 hidden group-hover:block bg-gray-800 text-white text-sm rounded px-2 py-1 z-50 w-full max-w-xs">
+                      {winner.name}
           </div>
         </div>
         
-        {/* Runner up */}
-        {secondPlace && (
-          <div className="bg-gray-300 rounded-lg p-6 shadow-lg text-center">
-            <img 
-              src="/medals/silver.svg" 
-              alt="Silver Medal" 
-              className="w-20 h-20 mx-auto mb-4"
-              onError={(e) => {
-                console.log("Medal image failed to load, using fallback");
-                e.target.style.display = 'none';
-              }}
-            />
-            <h2 className="text-2xl font-bold mb-4">Runner-up</h2>
-            
-            <div className="mb-4 text-lg font-semibold">
-              {secondPlace.name}
-            </div>
-            
-            <div className="flex justify-center items-center mb-2">
-              <span className="bg-gray-100 px-3 py-1 rounded-full text-gray-800">
-                {secondPlace.team}
-              </span>
-            </div>
-            
-            <div className="text-2xl font-bold">
-              {secondPlace.score} points
+                  {winner.team && (
+                    <div className="relative group">
+                      <p className="text-gray-600 mb-2 truncate" title={`Team: ${winner.team}`}>
+                        Team: {winner.team}
+                      </p>
+                      <div className="absolute left-0 -bottom-6 hidden group-hover:block bg-gray-800 text-white text-sm rounded px-2 py-1 z-50">
+                        Team: {winner.team}
             </div>
           </div>
         )}
+                  <div className="flex justify-between items-center mt-2">
+                    <span className="text-gray-600 text-sm">Final Score</span>
+                    <span className="font-bold text-2xl text-primary">{winner.score}</span>
       </div>
-      
-      {/* Third place (optional) */}
-      {thirdPlace && (
-        <div className="mt-6">
-          <div className="bg-amber-200 rounded-lg p-4 shadow-md text-center max-w-sm mx-auto">
-            <img 
-              src="/medals/bronze.svg" 
-              alt="Bronze Medal" 
-              className="w-14 h-14 mx-auto mb-2"
-              onError={(e) => {
-                console.log("Medal image failed to load, using fallback");
-                e.target.style.display = 'none';
-              }}
-            />
-            <h2 className="text-xl font-bold mb-2">Third Place</h2>
-            
-            <div className="mb-2 font-semibold">
-              {thirdPlace.name}
             </div>
-            
-            <div className="flex justify-center items-center mb-1">
-              <span className="bg-amber-100 px-2 py-0.5 rounded-full text-amber-800 text-sm">
-                {thirdPlace.team}
-              </span>
             </div>
-            
-            <div className="text-lg font-bold">
-              {thirdPlace.score} points
-            </div>
+            ))}
           </div>
         </div>
-      )}
+        
+        {/* Full leaderboard */}
+        <div>
+          <EnhancedLeaderboard 
+            quizId={quizId} 
+            showTeams={true}
+            animateEntrance={true}
+          />
+        </div>
+      </div>
       
       <div className="text-center mt-10 mb-6">
         <h3 className="text-xl font-semibold text-blue-700">
@@ -259,8 +258,15 @@ export default function WinnerCelebration({ quizId, onBack }) {
         </h3>
       </div>
       
-      {/* Navigation buttons - always show these buttons */}
+      {/* Navigation buttons */}
       <div className="flex justify-center space-x-4 mt-6 mb-10">
+        <Button 
+          onClick={() => setShowConfetti(!showConfetti)} 
+          variant="secondary" 
+          className="px-4 py-2"
+        >
+          {showConfetti ? "Hide Confetti" : "Show Confetti"}
+        </Button>
         {onBack && (
           <Button onClick={onBack} variant="secondary" className="px-4 py-2">
             Back to Results

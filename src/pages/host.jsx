@@ -53,6 +53,8 @@ export default function Host() {
       });
     }
     return particles;
+    
+
   };
 
   const particles = generateParticles(15);
@@ -268,23 +270,13 @@ export default function Host() {
 
   return (
     <section className="min-h-screen w-full flex flex-col items-center justify-center overflow-hidden relative">
-      {/* Animated Background */}
-      <div className="fixed inset-0 -z-10 bg-gradient-to-b from-[#03256C] to-[#06BEE1]">
-        {/* Animated waves */}
-        <div className="absolute bottom-0 left-0 right-0 h-64 overflow-hidden">
-          <div className="absolute bottom-[-10px] left-0 right-0 h-64 bg-[#06BEE1] opacity-20"
-               style={{
-                 transform: 'translateX(-50%) rotate(0deg) translateY(10px)',
-                 animation: 'wave 15s ease-in-out infinite',
-               }}
-          />
-          <div className="absolute bottom-[-15px] left-0 right-0 h-64 bg-[#1768AC] opacity-15"
-               style={{
-                 transform: 'translateX(-25%) rotate(0deg) translateY(10px)',
-                 animation: 'wave 17s ease-in-out infinite reverse',
-               }}
-          />
-        </div>
+      {/* Background Image */}
+      <div className="fixed inset-0 -z-10">
+        <img 
+          src="https://i.imgur.com/NSkjBnJ.jpeg" 
+          className="w-full h-full object-cover" 
+          alt="background" 
+        />
         
         {/* Floating particles */}
         {particles.map((particle) => (
@@ -306,7 +298,7 @@ export default function Host() {
 
       {step === "create-questions" && (
         <div className={`max-w-3xl mx-auto transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
-          <img src="/ICCTLOGO/LOGOICCT.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
+          <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
           <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>Create Quiz</h1>
           
           <div className="mb-6 bg-white/90 backdrop-blur-sm rounded-lg p-6 shadow-lg">
@@ -502,7 +494,7 @@ export default function Host() {
       
       {step === "view-participants" && (
         <div className={`max-w-3xl mx-auto transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
-          <img src="/ICCTLOGO/LOGOICCT.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
+          <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
           <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>Waiting for Participants</h1>
           
           <div className="bg-white/90 backdrop-blur-sm shadow-lg rounded-lg p-6 mb-6 transition-all duration-300 hover:shadow-glow">
@@ -531,13 +523,20 @@ export default function Host() {
                       animationDelay: `${index * 0.1}s`
                     }}
                   >
-                    <div className="flex items-center">
+                    <div className="flex items-center group relative">
                       <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white mr-3">
                         {participant.name.charAt(0).toUpperCase()}
                       </div>
-                      <div>
-                        <span className="font-bold">{participant.name}</span>
-                        {participant.team && <span className="text-gray-600 ml-2">({participant.team})</span>}
+                      <div className="truncate max-w-[250px]">
+                        <span className="font-bold" title={participant.name}>{participant.name}</span>
+                        {participant.team && (
+                          <span className="text-gray-600 ml-2 truncate inline-block" title={participant.team}>
+                            ({participant.team})
+                          </span>
+                        )}
+                        <div className="absolute left-0 bottom-full hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 z-50">
+                          {participant.name} {participant.team ? `(${participant.team})` : ''}
+                        </div>
                       </div>
                     </div>
                     <div className="text-xs text-gray-400">
@@ -575,7 +574,7 @@ export default function Host() {
       
       {step === "quiz-started" && (
         <div className="w-full max-w-4xl transition-all duration-700 ease-out transform">
-          <img src="/ICCTLOGO/LOGOICCT.png" className="mb-6 h-16 mx-auto" alt="ICCT School Logo" />
+          <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-16 mx-auto" alt="ICCT School Logo" />
           <QuizController quizId={quizCode} />
         </div>
       )}

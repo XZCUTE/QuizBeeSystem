@@ -1,6 +1,6 @@
 {
-  "name": "rahoot",
-  "version": "0.1.0",
+  "name": "icctqb",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,6 +17,7 @@
     "concurrently": "^8.2.2",
     "firebase": "^10.9.0",
     "framer-motion": "^12.7.4",
+    "lucide-react": "^0.501.0",
     "react": "^18.2.0",
     "react-confetti": "^6.1.0",
     "react-dom": "^18.2.0",

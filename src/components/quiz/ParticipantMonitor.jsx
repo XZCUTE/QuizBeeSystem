@@ -102,11 +102,21 @@ export default function ParticipantMonitor({ quizId, teamFilter }) {
         <tbody className="bg-white divide-y divide-gray-200">
           {participants.map((participant) => (
             <tr key={participant.id} className="hover:bg-gray-50">
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                {participant.name}
+              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 group relative">
+                <div className="truncate max-w-[200px]" title={participant.name}>
+                  {participant.name}
+                </div>
+                <div className="absolute left-0 bottom-full hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 z-50">
+                  {participant.name}
+                </div>
               </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {participant.team}
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 group relative">
+                <div className="truncate max-w-[150px]" title={participant.team}>
+                  {participant.team}
+                </div>
+                <div className="absolute left-0 bottom-full hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 z-50">
+                  {participant.team}
+                </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                 {participant.score || 0}

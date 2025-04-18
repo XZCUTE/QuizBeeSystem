@@ -65,23 +65,13 @@ export default function Home() {
 
   return (
     <section className="flex min-h-screen w-full flex-col items-center justify-center overflow-hidden">
-      {/* Animated Background */}
-      <div className="fixed inset-0 -z-10 bg-gradient-to-b from-[#03256C] to-[#06BEE1]">
-        {/* Animated waves */}
-        <div className="absolute bottom-0 left-0 right-0 h-64 overflow-hidden">
-          <div className="absolute bottom-[-10px] left-0 right-0 h-64 bg-[#06BEE1] opacity-20"
-               style={{
-                 transform: 'translateX(-50%) rotate(0deg) translateY(10px)',
-                 animation: 'wave 15s ease-in-out infinite',
-               }}
-          />
-          <div className="absolute bottom-[-15px] left-0 right-0 h-64 bg-[#1768AC] opacity-15"
-               style={{
-                 transform: 'translateX(-25%) rotate(0deg) translateY(10px)',
-                 animation: 'wave 17s ease-in-out infinite reverse',
-               }}
-          />
-        </div>
+      {/* Background Image */}
+      <div className="fixed inset-0 -z-10">
+        <img 
+          src="https://i.imgur.com/NSkjBnJ.jpeg" 
+          className="w-full h-full object-cover" 
+          alt="background" 
+        />
         
         {/* Floating particles */}
         {particles.map((particle) => (
@@ -123,32 +113,20 @@ export default function Home() {
         <div className={`flex flex-col gap-8 w-full max-w-lg px-4 transition-all duration-1000 delay-300 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
           <Button 
             onClick={handleHostClick} 
-            className="py-10 text-3xl font-bold relative overflow-hidden transition-transform duration-300 hover:scale-105 text-white"
+            className="btn-primary py-10 text-3xl font-bold relative overflow-hidden animated-card hover-glow transition-transform duration-300 hover:scale-105"
             onMouseEnter={() => sound.playHover()}
-            style={{
-              backgroundImage: "url('https://i.pinimg.com/1200x/b6/8d/4f/b68d4f33dca9c343219a204927ac67e6.jpg')",
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              borderRadius: "8px",
-              boxShadow: "0 4px 10px rgba(0,0,0,0.3)"
-            }}
           >
             <span className="relative z-10">HOST</span>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -translate-x-full animate-shimmer-slow"></div>
           </Button>
           
           <Button 
             onClick={handleParticipantClick} 
-            className="py-10 text-3xl font-bold relative overflow-hidden transition-transform duration-300 hover:scale-105 text-white"
+            className="btn-secondary py-10 text-3xl font-bold relative overflow-hidden animated-card hover-glow transition-transform duration-300 hover:scale-105 delay-200"
             onMouseEnter={() => sound.playHover()}
-            style={{
-              backgroundImage: "url('https://i.pinimg.com/1200x/54/13/26/541326d8aa1808c5c607fdd74c187eef.jpg')",
-              backgroundSize: "cover", 
-              backgroundPosition: "center",
-              borderRadius: "8px",
-              boxShadow: "0 4px 10px rgba(0,0,0,0.3)"
-            }}
           >
             <span className="relative z-10">PARTICIPANT</span>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -translate-x-full animate-shimmer-slow"></div>
           </Button>
         </div>
       </div>

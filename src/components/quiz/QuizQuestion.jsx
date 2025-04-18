@@ -1,9 +1,28 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "@/firebase/config";
-import { ref, update, get, serverTimestamp, onValue, off } from "firebase/database";
+import { ref, update, get, serverTimestamp, onValue, off, set } from "firebase/database";
 import Button from "@/components/Button";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
+
+// Define SVG components to replace Heroicons
+const CheckCircleIcon = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const XCircleIcon = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const ArrowRightIcon = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+  </svg>
+);
 
 // Enhanced difficulty multiplier with visual elements - removed multipliers as per new rules
 const difficultyDetails = {
@@ -216,128 +235,183 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
     };
   }, [quizId, question, participantId, isHost]);
 
-  const handleSelectAnswer = (index) => {
-    if (isAnswerSubmitted || timer === 0 || answerLocked) return;
-    // Update only the local selection state - never touches Firebase
-    setLocalSelectedAnswer(index);
+  // Define a single function that handles both selection and submission for multiple-choice questions
+  const handleSelectAnswer = (answer) => {
+    if (question.type === "multiple-choice") {
+      // For multiple choice, auto-submit when selected
+      setLocalSelectedAnswer(answer);
+      handleSubmitAnswer(answer); // Auto-submit the answer
+    } else {
+      // For fill-in-blank, just update the local selection
+      setLocalSelectedAnswer(answer);
+    }
   };
 
-  const handleSubmitAnswer = async () => {
-    // Use localSelectedAnswer here because it represents the current selection
-    if (localSelectedAnswer === null || isAnswerSubmitted || timer === 0 || answerLocked) return;
+  // Original submitAnswer function still used for fill-in-the-blank questions
+  const handleSubmitAnswer = async (answerValue = null) => {
+    if (isAnswerSubmitted || timer === 0 || answerLocked) return;
     
-    try {
-      // Lock the answer to prevent double submission
+    // Lock answer to prevent double submission
       setAnswerLocked(true);
+    
+    // Get the actual answer value based on question type
+    const finalAnswer = question.type === "multiple-choice" 
+      ? answerValue !== null ? answerValue : selectedAnswer
+      : localSelectedAnswer.trim();
+    
+    // Convert letter option (A,B,C,D) to numeric index (0,1,2,3) for database storage
+    let databaseAnswer = finalAnswer;
+    if (question.type === "multiple-choice") {
+      // Convert letter to index
+      const optionMap = { "A": 0, "B": 1, "C": 2, "D": 3 };
+      databaseAnswer = optionMap[finalAnswer] !== undefined ? optionMap[finalAnswer] : finalAnswer;
+    }
       
       // Record submission time
       const submissionTime = Date.now();
-      answerSentAtRef.current = submissionTime;
-      
-      // Check if the answer is correct
-      const isCorrect = 
-        (question.type === "multiple-choice" && localSelectedAnswer === question.correctAnswer) ||
-        (question.type === "fill-in-blank" && localSelectedAnswer.toLowerCase().trim() === question.correctAnswer.toLowerCase().trim());
-      
-      let scoreEarned = 0;
-      
-      if (isCorrect) {
-        // Get the base points for the question
-        const basePoints = question.points || 100;
+    const serverTimeDiff = serverTime ? submissionTime - serverTime : 0;
+    const adjustedSubmissionTime = Date.now() - serverTimeDiff;
+    
+    // Check if answer is correct using the consistent approach
+    let isCorrect = false;
+    if (question.type === "multiple-choice") {
+      // For database comparison, we need to check numeric values against the stored numeric correct answer
+      if (Array.isArray(question.correctAnswers) && question.correctAnswers.length > 0) {
+        // Convert correct answers from numbers to letters if needed for comparison
+        const letterToIndex = { "A": 0, "B": 1, "C": 2, "D": 3 };
+        const indexToLetter = { 0: "A", 1: "B", 2: "C", 3: "D" };
         
-        if (question.difficulty === "tie-breaker") {
-          // For tie-breaker questions, calculate score based on answer order
-          try {
-            // Get all answers for this question to determine order
-            const answersRef = ref(db, `quizzes/${quizId}/answers/${question.id}`);
-            const snapshot = await get(answersRef);
-            
-            let answerPosition = 1; // Default position if no other answers
-            
-            if (snapshot.exists()) {
-              const answersData = snapshot.val();
-              
-              // Filter for correct answers only
-              const correctAnswers = [];
-              Object.entries(answersData).forEach(([pid, answerData]) => {
-                // Skip the current participant's answer we're processing
-                if (pid === participantId) return;
-                
-                // Check if this answer is correct
-                const isAnswerCorrect = 
-                  (question.type === "multiple-choice" && answerData.answer === question.correctAnswer) ||
-                  (question.type === "fill-in-blank" && answerData.answer.toLowerCase().trim() === question.correctAnswer.toLowerCase().trim());
-                
-                if (isAnswerCorrect && answerData.scoreEarned > 0) {
-                  correctAnswers.push({
-                    timestamp: answerData.timestamp
-                  });
-                }
-              });
-              
-              // The current participant's position is the number of previous correct answers + 1
-              answerPosition = correctAnswers.length + 1;
-            }
-            
-            // Calculate score: basePoints - ((position - 1) * 5)
-            // First position gets full points, each subsequent position gets 5 fewer points
-            scoreEarned = Math.max(0, basePoints - ((answerPosition - 1) * 5));
-            
-          } catch (error) {
-            console.error("Error calculating tie-breaker score:", error);
-            // Fallback to full points if we can't determine position
-            scoreEarned = basePoints;
+        // Handle both cases - correctAnswers could be array of indices or letters
+        const normalizedCorrectAnswers = question.correctAnswers.map(ans => {
+          if (typeof ans === 'number') {
+            // Return the letter for UI comparison with finalAnswer
+            return indexToLetter[ans];
+          } else if (letterToIndex[ans] !== undefined) {
+            // Already a letter format
+            return ans;
           }
+          return ans; // If it's something else, leave it unchanged
+        });
+        
+        isCorrect = normalizedCorrectAnswers.includes(finalAnswer);
+      } else if (question.correctAnswer !== undefined) {
+        // Handle single correctAnswer case
+        if (typeof question.correctAnswer === 'number') {
+          // If correctAnswer is a number (index), compare with the databaseAnswer
+          isCorrect = databaseAnswer === question.correctAnswer;
         } else {
-          // For regular difficulties, just use the base points
-          scoreEarned = basePoints;
+          // If correctAnswer is a letter, compare directly
+          isCorrect = finalAnswer === question.correctAnswer;
         }
       }
-      
-      // Show score animation if points were earned
-      if (scoreEarned > 0) {
-        setScoreAnimation({ show: true, score: scoreEarned });
-        setTimeout(() => setScoreAnimation({ show: false, score: 0 }), 3000);
+    } else {
+      // For fill-in-blank, standardize to lowercase and trim
+      const correctAnswer = question.correctAnswer ? question.correctAnswer.toLowerCase().trim() : '';
+      isCorrect = finalAnswer.toLowerCase().trim() === correctAnswer;
+    }
+    
+    // Calculate score (tie-breaker questions should sort by time for correct answers)
+    let score = 0;
+    if (isCorrect) {
+      if (question.difficulty === "tie-breaker") {
+        // For tie-breakers, we'll calculate score in the back-end based on order of correct answers
+        score = question.points || 500; // Use question points as base score for tie-breakers
+      } else {
+        score = question.points || 1000; // Use question points if available
       }
-      
-      // Update local state BEFORE Firebase to avoid any delay
-      // This makes UI feel more responsive
-      setSubmittedAnswer(localSelectedAnswer);
-      setIsAnswerSubmitted(true);
-      
+    }
+    
+    try {
       // Save answer to database
-      // This only affects this particular participant and question
-      await update(ref(db, `quizzes/${quizId}/answers/${question.id}/${participantId}`), {
-        answer: localSelectedAnswer,
-        scoreEarned,
+      const thisParticipantAnswerRef = ref(
+        db,
+        `quizzes/${quizId}/answers/${question.id}/${participantId}`
+      );
+      
+      // Update the answer in the database
+      await update(thisParticipantAnswerRef, {
+        answer: databaseAnswer, // Use the converted numeric index for database storage
         isCorrect,
-        timeRemaining: timer,
-        timestamp: serverTimestamp()
+        score,
+        submittedAt: adjustedSubmissionTime,
       });
       
-      // Update participant's total score
-      if (scoreEarned > 0) {
+      // Also update the participant's total score in the quiz
+      if (isCorrect && score > 0) {
+        // Get the current total score for this participant
         const participantRef = ref(db, `quizzes/${quizId}/participants/${participantId}`);
-        const snapshot = await get(participantRef);
+        const participantSnap = await get(participantRef);
         
-        if (snapshot.exists()) {
-          const currentData = snapshot.val();
-          const currentScore = currentData.score || 0;
+        if (participantSnap.exists()) {
+          const participantData = participantSnap.val();
+          const currentTotalScore = participantData.score || 0;
+          const newTotalScore = currentTotalScore + score;
           
+          // Update the participant's total score
           await update(participantRef, {
-            score: currentScore + scoreEarned,
-            lastAnswerAt: serverTimestamp()
+            score: newTotalScore,
+            lastUpdated: adjustedSubmissionTime
           });
         }
       }
       
-      toast.success("Answer submitted!");
+      // Update local state to reflect the submitted answer
+      setIsAnswerSubmitted(true);
+      setSubmittedAnswer(finalAnswer); // Keep letter format (A,B,C,D) for the UI
       
+      // Show score animation for correct answers
+      if (isCorrect && score > 0) {
+        setScoreAnimation({
+          show: true,
+          score: score
+        });
+        
+        // Hide score animation after 2 seconds
+        setTimeout(() => {
+          setScoreAnimation({
+            show: false,
+            score: 0
+          });
+        }, 2000);
+      }
+      
+      // Show toast notification that answer was submitted
+      toast.success(
+        question.type === "multiple-choice" 
+          ? "Answer auto-submitted!" 
+          : "Answer submitted successfully!",
+        { 
+          duration: 2000,
+          icon: "🚀",
+          style: {
+            borderRadius: '10px',
+            background: '#333',
+            color: '#fff',
+          },
+        }
+      );
+      
+      // Show correct answer if enabled
+      if (question.showCorrectAnswer) {
+        setShowCorrectAnswer(true);
+      }
     } catch (error) {
       console.error("Error submitting answer:", error);
       toast.error("Failed to submit answer. Please try again.");
       setAnswerLocked(false);
-      setIsAnswerSubmitted(false);
+    }
+  };
+
+  // For fill-in-blank questions
+  const handleInputChange = (e) => {
+    if (isAnswerSubmitted || timer === 0 || answerLocked) return;
+    setLocalSelectedAnswer(e.target.value);
+  };
+
+  // For fill-in-blank questions
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && localSelectedAnswer && !isAnswerSubmitted && timer > 0 && !answerLocked) {
+      handleSubmitAnswer(localSelectedAnswer);
     }
   };
 
@@ -351,6 +425,10 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
       </div>
     );
   }
+
+  // Get difficulty details if available
+  const difficulty = question.difficulty || "intermediate";
+  const difficultyInfo = difficultyDetails[difficulty] || difficultyDetails.intermediate;
 
   return (
     <div className="p-6 relative">
@@ -371,9 +449,9 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
           onMouseEnter={() => setDifficultyTooltip(true)}
           onMouseLeave={() => setDifficultyTooltip(false)}
         >
-          <div className={`px-3 py-1.5 rounded-full ${difficultyDetails[question.difficulty]?.color || "bg-gray-500"} text-white flex items-center gap-2`}>
-            <span className="text-xs font-bold">{difficultyDetails[question.difficulty]?.label || "Standard"}</span>
-            <span>{difficultyDetails[question.difficulty]?.icon || "⭐"}</span>
+          <div className={`px-3 py-1.5 rounded-full ${difficultyInfo.color || "bg-gray-500"} text-white flex items-center gap-2`}>
+            <span className="text-xs font-bold">{difficultyInfo.label || "Standard"}</span>
+            <span>{difficultyInfo.icon || "⭐"}</span>
           </div>
           
           {/* Tooltip for difficulty explanation */}
@@ -385,7 +463,7 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
                 exit={{ opacity: 0, y: 10 }}
                 className="absolute top-full left-0 mt-2 bg-white p-3 rounded-lg shadow-lg z-10 w-64"
               >
-                <p className="text-sm font-semibold mb-1">{difficultyDetails[question.difficulty]?.label || "Standard"} Difficulty</p>
+                <p className="text-sm font-semibold mb-1">{difficultyInfo.label || "Standard"} Difficulty</p>
                 {question.difficulty === "tie-breaker" ? (
                   <p className="text-xs text-gray-600">Tie-breaker: First correct answer gets full points. Each subsequent correct answer gets 5 fewer points.</p>
                 ) : (
@@ -408,6 +486,31 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
         </motion.div>
       </div>
       
+      {/* Question Title and Type Indicator */}
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold mb-2">{question.title}</h2>
+        <div className="flex items-center">
+          <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+            question.type === "multiple-choice" ? "bg-primary/10 text-primary" : "bg-amber-100 text-amber-800"
+          }`}>
+            {question.type === "multiple-choice" ? "Multiple Choice" : "Fill in the blank"}
+          </div>
+          {question.type === "multiple-choice" && (
+            <motion.div 
+              initial={{ scale: 1 }}
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+              className="ml-2 px-3 py-1 rounded-full bg-gradient-to-r from-blue-500 to-primary text-white text-sm flex items-center shadow-md"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Auto-submit on click
+            </motion.div>
+          )}
+        </div>
+      </div>
+      
       {/* Question */}
       <div className="mb-6">
         <h2 className="text-2xl font-bold mb-2">{question.text}</h2>
@@ -423,48 +526,110 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
       
       {/* Options - Multiple Choice */}
       {question.type === "multiple-choice" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {question.options.map((option, index) => (
-            <motion.button
-              key={index}
-              onClick={() => handleSelectAnswer(index)}
-              disabled={isAnswerSubmitted || timer === 0 || answerLocked}
-              whileHover={{ scale: isAnswerSubmitted || timer === 0 || answerLocked ? 1 : 1.02 }}
-              whileTap={{ scale: isAnswerSubmitted || timer === 0 || answerLocked ? 1 : 0.98 }}
-              className={`p-4 rounded-lg text-left relative overflow-hidden transition-all ${
-                selectedAnswer === index
-                  ? "bg-primary text-white"
-                  : showCorrectAnswer && index === question.correctAnswer
-                  ? "bg-green-500 text-white"
-                  : showCorrectAnswer && selectedAnswer === index
-                  ? "bg-red-500 text-white"
-                  : "bg-gray-100 hover:bg-gray-200"
-              }`}
-            >
-              {/* Option letter badge */}
-              <span className="absolute left-0 top-0 bg-black/10 h-full w-10 flex items-center justify-center text-lg font-bold">
-                {String.fromCharCode(65 + index)}
-              </span>
+        <>
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {["A", "B", "C", "D"].map((option, index) => {
+              // Skip rendering if the option is not in the question's options
+              if (!question.options || !question.options[index]) return null;
               
-              <div className="ml-8">{option}</div>
+              const isSelected = localSelectedAnswer === option;
+              const isSubmitted = submittedAnswer === option;
               
-              {/* Show checkmark or X icon when correct answer is revealed */}
-              {showCorrectAnswer && (
-                <span className="absolute right-3 top-3">
-                  {index === question.correctAnswer ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : selectedAnswer === index ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  ) : null}
-                </span>
+              // For database comparison
+              const indexToLetter = { 0: "A", 1: "B", 2: "C", 3: "D" };
+              const letterToIndex = { "A": 0, "B": 1, "C": 2, "D": 3 };
+              
+              // Check if this option is a correct answer
+              let isCorrectOption = false;
+              if (Array.isArray(question.correctAnswers) && question.correctAnswers.length > 0) {
+                // Map numeric indices to letters for comparison
+                const normalizedCorrectAnswers = question.correctAnswers.map(ans => {
+                  return typeof ans === 'number' ? indexToLetter[ans] : ans;
+                });
+                isCorrectOption = normalizedCorrectAnswers.includes(option);
+              } else if (question.correctAnswer !== undefined) {
+                // If correctAnswer is a number (index), convert it to letter
+                const correctLetter = typeof question.correctAnswer === 'number' 
+                  ? indexToLetter[question.correctAnswer] 
+                  : question.correctAnswer;
+                  
+                isCorrectOption = option === correctLetter;
+              }
+              
+              // An option is correctly answered if it was submitted and is a correct option
+              const isCorrect = submittedAnswer === option && isCorrectOption;
+              
+              // An option is incorrectly answered if it was submitted but not a correct option
+              const isIncorrect = submittedAnswer === option && !isCorrectOption;
+              
+              // When showing correct answers, we want to highlight all correct options
+              const shouldShowAsCorrect = showCorrectAnswer && isCorrectOption;
+              
+              return (
+                <motion.button
+                  key={option}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                  className={`relative flex items-center p-4 border-2 rounded-lg shadow-sm transition-all duration-300 ${
+                    (isSelected || isSubmitted) ? "border-primary" : "border-gray-200"
+                  } ${
+                    submittedAnswer ? "cursor-default" : "cursor-pointer hover:border-primary hover:shadow-md"
+                  } ${
+                    shouldShowAsCorrect ? "bg-green-50 border-green-500" : 
+                    isIncorrect ? "bg-red-50 border-red-500" : "bg-white"
+                  }`}
+                  onClick={() => {
+                    if (!submittedAnswer && !answerLocked) {
+                      handleSelectAnswer(option);
+                    }
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}
+                  disabled={submittedAnswer || answerLocked}
+                >
+                  <div className={`flex items-center justify-center w-10 h-10 rounded-full mr-4 ${
+                    isSelected || isSubmitted ? "bg-primary text-white" : "bg-gray-100 text-gray-700"
+                  } ${
+                    shouldShowAsCorrect ? "bg-green-500 text-white" : isIncorrect ? "bg-red-500 text-white" : ""
+                  }`}>
+                    {option}
+                  </div>
+                  <div className="flex-1 text-left font-medium">
+                    {question.options[index]}
+                  </div>
+                  {((isSelected || isSubmitted) || showCorrectAnswer) && (
+                    <div className="absolute right-4">
+                      {shouldShowAsCorrect && <CheckCircleIcon className="w-6 h-6 text-green-500" />}
+                      {isIncorrect && <XCircleIcon className="w-6 h-6 text-red-500" />}
+                      {!submittedAnswer && !shouldShowAsCorrect && <ArrowRightIcon className="w-6 h-6 text-primary animate-pulse" />}
+                    </div>
+                  )}
+                  
+                  {/* Added flash animation overlay for when option is clicked */}
+                  {!submittedAnswer && !answerLocked && (
+                    <motion.div 
+                      className="absolute inset-0 bg-primary rounded-lg pointer-events-none"
+                      initial={{ opacity: 0 }}
+                      whileTap={{ opacity: 0.2, transition: { duration: 0.1 } }}
+                      exit={{ opacity: 0 }}
+                    />
               )}
             </motion.button>
-          ))}
+              );
+            })}
+          </div>
+          
+          {/* Note explaining auto-submit behavior */}
+          {!submittedAnswer && !answerLocked && (
+            <div className="mt-4 text-sm text-gray-600 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <span>Your answer will be automatically submitted when you click an option.</span>
         </div>
+          )}
+        </>
       )}
       
       {/* Fill in the blank */}
@@ -475,7 +640,8 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
               type="text"
               placeholder="Your answer"
               value={isAnswerSubmitted ? submittedAnswer || "" : localSelectedAnswer || ""}
-              onChange={(e) => !isAnswerSubmitted && setLocalSelectedAnswer(e.target.value)}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
               disabled={isAnswerSubmitted || timer === 0 || answerLocked}
               className="w-full p-4 pr-12 border-2 border-primary/30 focus:border-primary rounded-lg transition-all text-lg"
             />
@@ -514,11 +680,31 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
       {isHost && (
         <div className="border-t mt-6 pt-4">
           <div className="font-bold mb-2 text-primary">Host Information</div>
-          <p className="bg-gray-100 p-3 rounded-lg">Correct answer: {
+          <p className="bg-gray-100 p-3 rounded-lg">
+            Correct answer: {
             question.type === "multiple-choice" 
-              ? `Option ${String.fromCharCode(65 + question.correctAnswer)}: ${question.options[question.correctAnswer]}`
+                ? (() => {
+                    // For database comparison
+                    const indexToLetter = { 0: "A", 1: "B", 2: "C", 3: "D" };
+                    
+                    const correctAnswers = Array.isArray(question.correctAnswers) && question.correctAnswers.length > 0 
+                      ? question.correctAnswers 
+                      : question.correctAnswer !== undefined 
+                        ? [question.correctAnswer]
+                        : [];
+                    
+                    return correctAnswers.map(ans => {
+                      // Convert numeric indices to letters if necessary
+                      const letterOption = typeof ans === 'number' ? indexToLetter[ans] : ans;
+                      
+                      // Using the letter option, get the index for retrieving the option text
+                      const letterIndex = letterOption.charCodeAt(0) - 65; // A=0, B=1, etc.
+                      return `Option ${letterOption}: ${question.options[letterIndex]}`;
+                    }).join(", ");
+                  })()
               : question.correctAnswer
-          }</p>
+            }
+          </p>
           
           {question.difficulty === "tie-breaker" && (
             <div className="mt-2 text-sm text-gray-600 bg-purple-50 p-2 rounded">
@@ -532,61 +718,56 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
         </div>
       )}
       
-      {/* Submit button */}
-      {!isHost && !isAnswerSubmitted && timer > 0 && !answerLocked && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <Button
-            onClick={handleSubmitAnswer}
-            disabled={localSelectedAnswer === null}
-            className="w-full bg-gradient-to-r from-primary to-secondary py-3 text-lg"
-          >
-            Submit Answer
-          </Button>
-        </motion.div>
-      )}
-      
-      {/* Results */}
+      {/* Submission status and feedback */}
       {isAnswerSubmitted && (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className={`text-center p-6 rounded-lg border-2 ${submittedAnswer === question.correctAnswer ? "bg-green-100 border-green-300" : "bg-red-100 border-red-300"}`}
-        >
-          <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-3 ${submittedAnswer === question.correctAnswer ? "bg-green-500" : "bg-red-500"} text-white`}>
-            {submittedAnswer === question.correctAnswer ? (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+        <div className="mt-6 p-4 bg-blue-100 rounded-lg text-center">
+          <p className="text-blue-800 font-medium">
+            Your answer has been submitted.
+            {showCorrectAnswer && selectedAnswer !== null && (
+              (() => {
+                // For database comparison
+                const indexToLetter = { 0: "A", 1: "B", 2: "C", 3: "D" };
+                const letterToIndex = { "A": 0, "B": 1, "C": 2, "D": 3 };
+                
+                // Check if the selected answer is correct
+                let isCorrectAnswer = false;
+                
+                // For multiple choice, check against the correct answer(s)
+                if (question.type === "multiple-choice") {
+                  if (Array.isArray(question.correctAnswers) && question.correctAnswers.length > 0) {
+                    // Map numeric indices to letters for comparison
+                    const normalizedCorrectAnswers = question.correctAnswers.map(ans => {
+                      return typeof ans === 'number' ? indexToLetter[ans] : ans;
+                    });
+                    isCorrectAnswer = normalizedCorrectAnswers.includes(selectedAnswer);
+                  } else if (question.correctAnswer !== undefined) {
+                    // If correctAnswer is a number (index), convert it to letter for comparison
+                    const correctLetter = typeof question.correctAnswer === 'number' 
+                      ? indexToLetter[question.correctAnswer] 
+                      : question.correctAnswer;
+                      
+                    isCorrectAnswer = selectedAnswer === correctLetter;
+                  }
+                } else {
+                  // For fill-in-blank
+                  const correctAnswer = question.correctAnswer ? question.correctAnswer.toLowerCase().trim() : '';
+                  isCorrectAnswer = selectedAnswer.toLowerCase().trim() === correctAnswer;
+                }
+                
+                return isCorrectAnswer 
+                  ? <span className="text-green-700 font-bold"> Correct!</span>
+                  : <span className="text-red-700 font-bold"> Not correct.</span>
+              })()
             )}
-          </div>
-          <p className="text-xl font-bold">
-            {submittedAnswer === question.correctAnswer ? "Correct! 🎉" : "Incorrect"}
           </p>
-          {submittedAnswer === question.correctAnswer && scoreAnimation.score > 0 && (
-            <div className="mt-2 text-lg text-green-700 font-medium">
-              <span className="bg-green-200 px-2 py-1 rounded">{scoreAnimation.score} points earned</span>
             </div>
           )}
-          <p className="mt-3">
-            {showCorrectAnswer && submittedAnswer !== question.correctAnswer &&
-              <span className="text-red-700 font-medium">
-                The correct answer is: {
-                  question.type === "multiple-choice" 
-                    ? question.options[question.correctAnswer]
-                    : question.correctAnswer
-                }
-              </span>
-            }
-          </p>
-        </motion.div>
+      
+      {/* Time's up message */}
+      {timer === 0 && !isAnswerSubmitted && (
+        <div className="mt-6 p-4 bg-yellow-100 rounded-lg text-center">
+          <p className="text-yellow-800 font-bold">Time's up! You didn't submit an answer in time.</p>
+        </div>
       )}
       
       {/* Animated score popup */}
@@ -605,6 +786,19 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Submit Button - only show for fill-in-the-blank questions */}
+      {question.type === "fill-in-blank" && (
+        <button
+          className={`mt-6 px-6 py-3 rounded-md bg-primary text-white font-bold shadow-md hover:bg-primary-dark transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
+            submittedAnswer ? "opacity-50 cursor-not-allowed" : ""
+          }`}
+          onClick={() => handleSubmitAnswer(localSelectedAnswer)}
+          disabled={submittedAnswer || !localSelectedAnswer || answerLocked}
+        >
+          {submittedAnswer ? "Answer Submitted" : "Submit Answer"}
+        </button>
+      )}
     </div>
   );
 } 
