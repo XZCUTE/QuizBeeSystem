@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '@/components/Button';
-import bgImage from '@/assets/background.svg';
 import { useSocketContext } from '@/context/socket';
 import toast from 'react-hot-toast';
 import useSound from '@/hooks/useSound';
@@ -68,8 +67,6 @@ export default function Home() {
     <section className="flex min-h-screen w-full flex-col items-center justify-center overflow-hidden">
       {/* Animated Background */}
       <div className="fixed inset-0 -z-10 bg-gradient-to-b from-[#03256C] to-[#06BEE1]">
-        <img src={bgImage} className="w-full h-full object-cover opacity-30" alt="background" />
-        
         {/* Animated waves */}
         <div className="absolute bottom-0 left-0 right-0 h-64 overflow-hidden">
           <div className="absolute bottom-[-10px] left-0 right-0 h-64 bg-[#06BEE1] opacity-20"
@@ -107,7 +104,7 @@ export default function Home() {
       {/* Content with entrance animations */}
       <div className={`transition-all duration-1000 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
         <img 
-          src="/ICCTLOGO/LOGOICCT.png" 
+          src="https://i.imgur.com/7OSw7In.png" 
           className="mb-8 h-40 mx-auto animate-float" 
           alt="ICCT School Logo" 
         />
@@ -126,20 +123,32 @@ export default function Home() {
         <div className={`flex flex-col gap-8 w-full max-w-lg px-4 transition-all duration-1000 delay-300 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
           <Button 
             onClick={handleHostClick} 
-            className="btn-primary py-10 text-3xl font-bold relative overflow-hidden animated-card hover-glow transition-transform duration-300 hover:scale-105"
+            className="py-10 text-3xl font-bold relative overflow-hidden transition-transform duration-300 hover:scale-105 text-white"
             onMouseEnter={() => sound.playHover()}
+            style={{
+              backgroundImage: "url('https://i.pinimg.com/1200x/b6/8d/4f/b68d4f33dca9c343219a204927ac67e6.jpg')",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              borderRadius: "8px",
+              boxShadow: "0 4px 10px rgba(0,0,0,0.3)"
+            }}
           >
             <span className="relative z-10">HOST</span>
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -translate-x-full animate-shimmer-slow"></div>
           </Button>
           
           <Button 
             onClick={handleParticipantClick} 
-            className="btn-secondary py-10 text-3xl font-bold relative overflow-hidden animated-card hover-glow transition-transform duration-300 hover:scale-105 delay-200"
+            className="py-10 text-3xl font-bold relative overflow-hidden transition-transform duration-300 hover:scale-105 text-white"
             onMouseEnter={() => sound.playHover()}
+            style={{
+              backgroundImage: "url('https://i.pinimg.com/1200x/54/13/26/541326d8aa1808c5c607fdd74c187eef.jpg')",
+              backgroundSize: "cover", 
+              backgroundPosition: "center",
+              borderRadius: "8px",
+              boxShadow: "0 4px 10px rgba(0,0,0,0.3)"
+            }}
           >
             <span className="relative z-10">PARTICIPANT</span>
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -translate-x-full animate-shimmer-slow"></div>
           </Button>
         </div>
       </div>
