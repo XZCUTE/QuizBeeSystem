@@ -1,4 +1,4 @@
-# ICCT Quiz Bee System
+# ICCTQB - ICCT Quiz Bee System
 
 A real-time quiz application built with React, Vite, and Firebase. 
 
@@ -10,35 +10,38 @@ A real-time quiz application built with React, Vite, and Firebase.
 - Real-time participant list and quiz synchronization
 - Team and individual leaderboards
 - Multiple difficulty levels (Easy, Intermediate, Hard, Difficult, Tie-Breaker)
+- Visual cues for auto-submission of multiple-choice questions
+- Independent answer selection for participants
 
 ## Scoring System
 
-The quiz implements a comprehensive scoring system that rewards both accuracy and speed:
+The quiz implements a straightforward scoring system that rewards both accuracy and speed:
 
 ### Basic Score Calculation
 
 Scores are calculated using the following formula:
 
 ```
-Score = basePoints * difficultyMultiplier * (0.5 + timeBonus * 0.5)
+Score = basePoints * (0.5 + timeBonus * 0.5)
 ```
 
 Where:
 - `basePoints`: The base point value assigned to each question (default: 100)
-- `difficultyMultiplier`: A multiplier based on question difficulty
 - `timeBonus`: A percentage of time remaining (faster answers earn higher bonuses)
+THIS IS ONLY APPLICABLE ON TIE-BREAKER...
 
-### Difficulty Multipliers
 
-Questions can be assigned different difficulty levels, each with a corresponding multiplier:
+### Difficulty Levels
 
-| Difficulty Level | Multiplier |
-|------------------|------------|
-| Easy             | 1.0        |
-| Intermediate     | 1.5        |
-| Hard             | 2.0        |
-| Difficult        | 2.5        |
-| Tie-Breaker      | 3.0        |
+Questions can be assigned different difficulty levels:
+
+- Easy
+- Intermediate
+- Hard
+- Difficult
+- Tie-Breaker
+
+Each difficulty level helps organize questions by complexity but does not affect scoring directly.
 
 ### Time Bonus
 
@@ -55,9 +58,6 @@ This means answering a question immediately can earn up to 50% more points than 
 When participants have equal scores, the application implements a sophisticated tie-breaking mechanism:
 
 1. **Tie-Breaker Questions**: Special questions marked with the "tie-breaker" difficulty.
-2. **First-Correct-Answer Ranking**: If two participants have the same score, the participant who was first to correctly answer a tie-breaker question ranks higher.
-3. **Answer Timestamp**: The system records the exact timestamp when each answer was submitted using the Firebase server timestamp.
-4. **Fallback Mechanism**: If neither participant has answered a tie-breaker question correctly (or if there are no tie-breaker questions), the system falls back to using the timestamp of their last answer as a tiebreaker.
 
 ### Viewing Tie-Breaker Results
 
@@ -98,7 +98,7 @@ This ensures a fair and transparent ranking system even when multiple participan
 
 ```bash
 git clone <repository-url>
-cd Rahoot
+cd ICCTQB
 ```
 
 2. Install dependencies
@@ -136,22 +136,6 @@ npm run build
 # or
 yarn build
 ```
-
-## Project Structure
-
-```
-src/
- ├── App.jsx           # Main application with routes
- ├── main.jsx          # Application entry point
- ├── assets/           # Static assets
- ├── components/       # Reusable components
- │   └── quiz/         # Quiz-specific components
- ├── context/          # React context providers
- ├── firebase/         # Firebase configuration
- ├── pages/            # Route components
- └── styles/           # Global styles
-```
-
 ## Technology Stack
 
 - React 18
@@ -160,3 +144,6 @@ src/
 - Socket.io
 - React Router
 - Tailwind CSS
+- Framer Motion
+- React Confetti
+- React Hot Toast
