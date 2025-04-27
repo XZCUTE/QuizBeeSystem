@@ -9,6 +9,7 @@ import QuizResults from '@/components/quiz/QuizResults';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import Layout from '@/components/Layout';
 import ParticipantWaiting from '@/components/participant/ParticipantWaiting';
+import { FaHistory } from 'react-icons/fa';
 
 // Component to display participant info in the header
 function ParticipantInfo({ name, team }) {
@@ -23,6 +24,26 @@ function ParticipantInfo({ name, team }) {
         <div className="font-bold text-lg">{team}</div>
       </div>
     </div>
+  );
+}
+
+// Component to display history button
+function HistoryButton({ quizCode }) {
+  const navigate = useNavigate();
+  
+  const handleClick = () => {
+    // Open in new tab instead of navigating in the current tab
+    window.open(`/history?quizId=${quizCode}`, '_blank', 'noopener,noreferrer');
+  };
+  
+  return (
+    <button
+      onClick={handleClick}
+      className="fixed top-4 right-4 z-50 bg-white rounded-full p-3 shadow-md text-primary hover:bg-primary hover:text-white transition-colors duration-300 border-2 border-primary/30"
+      title="View Quiz History"
+    >
+      <FaHistory className="text-xl" />
+    </button>
   );
 }
 
@@ -216,6 +237,9 @@ export default function Participant() {
         {participantName && participantTeam && (
           <ParticipantInfo name={participantName} team={participantTeam} />
         )}
+        
+        {/* Always show history button if we have a quiz code */}
+        {quizCode && <HistoryButton quizCode={quizCode} />}
         
         {quizStatus === 'waiting' && (
           <ParticipantWaiting 

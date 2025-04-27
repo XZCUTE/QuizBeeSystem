@@ -6,6 +6,7 @@ import Host from '@/pages/host';
 import Participant from '@/pages/participant';
 import SoundControl from '@/components/SoundControl';
 import JoinQuiz from "@/components/JoinQuiz";
+import HistoryPage from '@/pages/history';
 
 export default function App() {
   // Set document title and favicon
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/host" element={<Host />} />
           <Route path="/join" element={<JoinQuiz />} />
           <Route path="/participant/waiting" element={<Participant />} />
+          <Route path="/history" element={<HistoryPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         

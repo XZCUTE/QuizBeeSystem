@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { db } from "@/firebase/config";
-import { ref, update, get, onValue, set, serverTimestamp } from "firebase/database";
+import { ref, update, get, onValue, set, serverTimestamp, off } from "firebase/database";
 import { useNavigate } from "react-router-dom";
 import Button from "@/components/Button";
 import QuizQuestion from "./QuizQuestion";
@@ -11,9 +11,9 @@ import WinnerCelebration from "./WinnerCelebration";
 import TieBreakerStats from "./TieBreakerStats";
 import TiedParticipants from "./TiedParticipants";
 import toast from "react-hot-toast";
-import Countdown from './Countdown';
-import FullScreenConfetti from '@/components/FullScreenConfetti';
+import CentralizedTimer from "./CentralizedTimer";
 import { useAudio } from "@/contexts/AudioContext";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function QuizController({ quizId }) {
   const navigate = useNavigate();
@@ -29,7 +29,6 @@ export default function QuizController({ quizId }) {
   const [teams, setTeams] = useState([]);
   const [timer, setTimer] = useState(null);
   const [timerRunning, setTimerRunning] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
   const { playSound } = useAudio();
   const [winnersLoading, setWinnersLoading] = useState(false);
 
@@ -101,7 +100,60 @@ export default function QuizController({ quizId }) {
     };
   }, [quizId]);
 
-  // Combined function to handle moving to the next question
+  // Modified startTimer function to ensure it works reliably
+  const startTimer = useCallback(async (seconds) => {
+    try {
+      if (!quiz || !quiz.questions) return;
+      
+      const questionId = quiz.questions[currentQuestionIndex].id;
+      
+      // First, ensure any existing timer is properly stopped
+      await update(ref(db, `quizzes/${quizId}/questionTimers/${questionId}`), {
+        isActive: false
+      });
+      
+      // Also update legacy timer for backward compatibility
+      await update(ref(db, `quizzes/${quizId}`), {
+        timerRunning: false
+      });
+      
+      // Toast notification to indicate the timer will start shortly
+      toast.success("Timer starting in 3 seconds...");
+      
+      // Add a 3-second delay before starting the timer
+      setTimeout(async () => {
+        // Get the current timestamp
+        const currentTime = Date.now();
+        
+        // Set the centralized timer in the database
+        await set(ref(db, `quizzes/${quizId}/questionTimers/${questionId}`), {
+          duration: seconds,
+          startTime: currentTime,
+          isActive: true
+        });
+        
+        // Also update legacy timer for backward compatibility
+        await update(ref(db, `quizzes/${quizId}`), {
+          timer: seconds,
+          timerRunning: true
+        });
+        
+        // Play sound only when explicitly starting timer
+        playSound('click');
+        
+        // Update local state to reflect timer running
+        setTimerRunning(true);
+      }, 3000); // 3-second delay
+      
+      return true;
+    } catch (error) {
+      console.error("Error starting timer:", error);
+      toast.error("Failed to start timer");
+      return false;
+    }
+  }, [quiz, currentQuestionIndex, quizId, playSound, setTimerRunning]);
+
+  // Modified next question handler to auto-start timer with a delay
   const handleNextQuestion = async () => {
     playSound('click');
     
@@ -137,6 +189,69 @@ export default function QuizController({ quizId }) {
     setTimer(null);
     
     toast.success(`Moving to Question ${nextIndex + 1}`);
+    
+    // Start timer with a delay
+    if (quiz.questions[nextIndex]) {
+      const questionTimer = quiz.questions[nextIndex].timer || 30;
+      await startTimer(questionTimer);
+    }
+  };
+
+  // Update the way we handle the auto-start effect with a delay
+  useEffect(() => {
+    if (quiz && quiz.status === "active" && !timerRunning) {
+      // Make sure we have a current question that isn't already being timed
+      const currentQ = quiz.questions[currentQuestionIndex];
+      
+      if (currentQ) {
+        // Check if this question already has an active timer
+        const checkForExistingTimer = async () => {
+          try {
+            const timerRef = ref(db, `quizzes/${quizId}/questionTimers/${currentQ.id}`);
+            const snapshot = await get(timerRef);
+            
+            // Only auto-start if there's no active timer for this question
+            if (!snapshot.exists() || !snapshot.val().isActive) {
+              // Start timer with a delay
+              const questionTimer = currentQ.timer || 30;
+              await startTimer(questionTimer);
+            }
+          } catch (error) {
+            console.error("Error checking for existing timer:", error);
+          }
+        };
+        
+        checkForExistingTimer();
+      }
+    }
+  }, [quiz, currentQuestionIndex, timerRunning, quizId, startTimer]);
+
+  // Add a function to start the quiz - modified to start with a delay
+  const handleStartQuiz = async () => {
+    playSound('click');
+    
+    try {
+      // Update quiz status to active if it's not already
+      if (!quiz || quiz.status === 'active') return;
+      
+      // Update the quiz status in the database
+      await update(ref(db, `quizzes/${quizId}`), {
+        status: "active",
+        startedAt: serverTimestamp()
+      });
+      
+      // Start timer with a delay for the first question
+      if (quiz.questions && quiz.questions.length > 0) {
+        const questionTimer = quiz.questions[0].timer || 30;
+        await startTimer(questionTimer);
+      }
+      
+      // Toast notification
+      toast.success("Quiz started!");
+    } catch (error) {
+      console.error("Error starting quiz:", error);
+      toast.error("Failed to start the quiz");
+    }
   };
 
   const handleToggleLeaderboard = () => {
@@ -230,25 +345,50 @@ export default function QuizController({ quizId }) {
     };
   }, [quizId]);
 
-  const startTimer = async (seconds) => {
-    playSound('click');
-    
-    // Set timer value
-    await update(ref(db, `quizzes/${quizId}/timer`), seconds);
-    
-    // Start the timer
-    await update(ref(db, `quizzes/${quizId}/timerRunning`), true);
-    
-    toast.success(`Timer started: ${seconds} seconds`);
-  };
-
+  // Improved stopTimer function to ensure it works reliably
   const stopTimer = async () => {
     playSound('click');
     
-    // Stop the timer
-    await update(ref(db, `quizzes/${quizId}/timerRunning`), false);
+    try {
+      if (!quiz || !quiz.questions) return;
+      
+      const questionId = quiz.questions[currentQuestionIndex].id;
+      
+      // Get current timer state to save current time remaining
+      const timerRef = ref(db, `quizzes/${quizId}/questionTimers/${questionId}`);
+      const snapshot = await get(timerRef);
+      let remainingSeconds = 0;
+      
+      if (snapshot.exists()) {
+        const timerData = snapshot.val();
+        if (timerData.isActive && timerData.startTime && timerData.duration) {
+          const currentTime = Date.now();
+          const elapsedSeconds = Math.floor((currentTime - timerData.startTime) / 1000);
+          remainingSeconds = Math.max(0, timerData.duration - elapsedSeconds);
+        }
+      }
+      
+      // Update the timer to inactive but preserve the remaining time
+      await update(ref(db, `quizzes/${quizId}/questionTimers/${questionId}`), {
+        isActive: false,
+        duration: remainingSeconds, // Save remaining time for if the timer is restarted
+        pausedAt: Date.now()
+      });
+      
+      // Also update legacy timer for backward compatibility
+      await update(ref(db, `quizzes/${quizId}`), {
+        timer: remainingSeconds,
+        timerRunning: false
+      });
+    
+      // Update local state immediately
+      setTimerRunning(false);
     
     toast.success('Timer stopped');
+    } catch (error) {
+      console.error("Error stopping timer:", error);
+      toast.error("Failed to stop timer");
+    }
   };
 
   if (loading) {
@@ -283,13 +423,6 @@ export default function QuizController({ quizId }) {
   if (quizCompleted) {
     return (
       <div className="p-4 max-w-4xl mx-auto">
-        {showConfetti && (
-          <FullScreenConfetti 
-            active={true} 
-            pieces={400}
-            recycle={true}
-          />
-        )}
         {showWinners ? (
           <WinnerCelebration 
             quizId={quizId} 
@@ -322,8 +455,6 @@ export default function QuizController({ quizId }) {
               <Button 
                 onClick={handleShowWinners} 
                 className="bg-gradient-to-r from-primary to-secondary text-white w-full py-3 text-xl"
-                onMouseEnter={() => setShowConfetti(true)}
-                onMouseLeave={() => setShowConfetti(false)}
                 disabled={winnersLoading}
               >
                 {winnersLoading ? (
@@ -370,7 +501,7 @@ export default function QuizController({ quizId }) {
               )}
               
               {/* Content based on selected view */}
-              <div className="w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: "min(70vh, 600px)" }}>
+              <div className="w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: "min(60vh, 500px)" }}>
                 {showLeaderboard && <EnhancedLeaderboard quizId={quizId} showTeams={true} animateEntrance={false} />}
                 {showParticipants && <ParticipantMonitor quizId={quizId} teamFilter={selectedTeam} />}
                 {showTieBreakerStats && <TieBreakerStats quizId={quizId} />}
@@ -383,6 +514,25 @@ export default function QuizController({ quizId }) {
             </div>
           </>
         )}
+      </div>
+    );
+  }
+
+  if (quiz && quiz.status !== "active" && !quizCompleted) {
+    return (
+      <div className="p-4 max-w-4xl mx-auto">
+        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <h1 className="text-3xl font-bold text-primary mb-6">{quiz.title}</h1>
+          <p className="mb-8 text-gray-700">Ready to start the quiz? Click the button below to begin.</p>
+          
+          <Button 
+            onClick={handleStartQuiz}
+            variant="primary"
+            className="px-8 py-4 text-xl"
+          >
+            Start Quiz
+          </Button>
+        </div>
       </div>
     );
   }
@@ -497,6 +647,64 @@ export default function QuizController({ quizId }) {
                             <span className="text-lg">{currentQuestion.correctAnswer}</span>
                           </div>
                         </div>
+                      ) : currentQuestion.type === 'true-false' ? (
+                        <div className="mt-4">
+                          <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-semibold inline-block mb-3">
+                            True or False
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div
+                              className={`p-4 rounded-lg border-2 transition-all ${
+                                currentQuestion.correctAnswer === 0
+                                  ? 'border-green-500 bg-green-50'
+                                  : 'border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-center">
+                                <div className={`w-8 h-8 rounded-full mr-3 flex items-center justify-center text-lg font-semibold ${
+                                  currentQuestion.correctAnswer === 0
+                                    ? 'bg-green-500 text-white'
+                                    : 'bg-gray-200 text-gray-700'
+                                }`}>
+                                  A
+                                </div>
+                                <span className="text-lg">True</span>
+                                {currentQuestion.correctAnswer === 0 && (
+                                  <span className="ml-auto text-green-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div
+                              className={`p-4 rounded-lg border-2 transition-all ${
+                                currentQuestion.correctAnswer === 1
+                                  ? 'border-green-500 bg-green-50'
+                                  : 'border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-center">
+                                <div className={`w-8 h-8 rounded-full mr-3 flex items-center justify-center text-lg font-semibold ${
+                                  currentQuestion.correctAnswer === 1
+                                    ? 'bg-green-500 text-white'
+                                    : 'bg-gray-200 text-gray-700'
+                                }`}>
+                                  B
+                                </div>
+                                <span className="text-lg">False</span>
+                                {currentQuestion.correctAnswer === 1 && (
+                                  <span className="ml-auto text-green-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       ) : (
                         <div className="text-gray-500 mt-4">No options available for this question</div>
                       )}
@@ -506,6 +714,38 @@ export default function QuizController({ quizId }) {
                       <p>No current question available</p>
                     </div>
                   )}
+                </div>
+                
+                {/* Timer Controls - Modified to remove countdown */}
+                <div className="flex flex-col items-center space-y-2 mb-4 relative">
+                  <CentralizedTimer 
+                    quizId={quizId} 
+                    questionId={currentQuestion.id} 
+                    initialTime={currentQuestion.timer || 30}
+                    onTimeUp={() => {
+                      // When time is up, we can handle it here if needed
+                      // Auto-update timer status in local state
+                      setTimerRunning(false);
+                    }}
+                  />
+                  
+                  {/* Manual timer controls for host */}
+                  <div className="flex space-x-2 mt-2">
+                    <Button 
+                      onClick={() => startTimer(currentQuestion.timer || 30)} 
+                      className="bg-primary text-white px-4 py-2"
+                      disabled={timerRunning}
+                    >
+                      Restart Timer
+                    </Button>
+                    <Button 
+                      onClick={stopTimer} 
+                      className="bg-red-500 text-white px-4 py-2" 
+                      disabled={!timerRunning}
+                    >
+                      Stop Timer
+                    </Button>
+                  </div>
                 </div>
                 
                 {/* Stats and Participants */}
@@ -543,7 +783,7 @@ export default function QuizController({ quizId }) {
                 )}
                 
                 {/* Content based on selected view */}
-                <div className="w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: "min(70vh, 600px)" }}>
+                <div className="w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: "min(60vh, 500px)" }}>
                   {showLeaderboard && <EnhancedLeaderboard quizId={quizId} showTeams={true} animateEntrance={false} />}
                   {showParticipants && <ParticipantMonitor quizId={quizId} teamFilter={selectedTeam} />}
                   {showTieBreakerStats && <TieBreakerStats quizId={quizId} />}

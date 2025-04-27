@@ -361,14 +361,14 @@ export default function EnhancedLeaderboard({
 
   // Full view with tabs
   return (
-    <div className={`glass-panel p-6 rounded-xl overflow-hidden ${animateEntrance ? 'anim-show' : ''}`}>
-      <h2 className="text-2xl font-bold mb-6 text-center bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+    <div className={`glass-panel p-4 rounded-xl ${animateEntrance ? 'anim-show' : ''}`}>
+      <h2 className="text-2xl font-bold mb-4 text-center bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
         Leaderboard
       </h2>
       
       {/* Tab navigation for individual/team views */}
       {showTeams && teamScores.length > 0 && (
-        <div className="flex rounded-lg overflow-hidden mb-6 border border-gray-200">
+        <div className="flex rounded-lg overflow-hidden mb-4 border border-gray-200">
           <button 
             className={`flex-1 py-2 px-4 font-medium text-sm transition-all ${activeTab === 'individual' 
               ? 'bg-primary text-white shadow-md' 
@@ -388,24 +388,24 @@ export default function EnhancedLeaderboard({
         </div>
       )}
       
-      {/* Individual rankings tab */}
+      {/* Individual rankings tab - IMPROVED OVERFLOW HANDLING */}
       {activeTab === 'individual' && (
-        <div className="overflow-hidden rounded-lg border border-gray-200">
-          <table className="min-w-full divide-y divide-gray-200 table-fixed">
-            <thead className="bg-gray-50">
+        <div className="overflow-x-auto overflow-y-auto max-h-[60vh] rounded-lg border border-gray-200">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th scope="col" className="w-[15%] py-4 px-4 md:px-6 text-left text-base md:text-lg font-bold uppercase tracking-wider text-primary">
+                <th scope="col" className="w-[60px] py-3 px-3 text-left text-sm font-bold uppercase tracking-wider text-primary">
                   Rank
                 </th>
-                <th scope="col" className="w-[40%] py-4 px-4 md:px-6 text-left text-base md:text-lg font-bold uppercase tracking-wider text-primary">
+                <th scope="col" className="w-[40%] py-3 px-3 text-left text-sm font-bold uppercase tracking-wider text-primary">
                   Name
                 </th>
                 {showTeams && (
-                  <th scope="col" className="w-[25%] py-4 px-4 md:px-6 text-left text-base md:text-lg font-bold uppercase tracking-wider text-primary">
+                  <th scope="col" className="w-[25%] py-3 px-3 text-left text-sm font-bold uppercase tracking-wider text-primary">
                     Team
                   </th>
                 )}
-                <th scope="col" className="w-[20%] py-4 px-4 md:px-6 text-right text-base md:text-lg font-bold uppercase tracking-wider text-primary">
+                <th scope="col" className="w-[80px] py-3 px-3 text-right text-sm font-bold uppercase tracking-wider text-primary">
                   Score
                 </th>
               </tr>
@@ -418,33 +418,33 @@ export default function EnhancedLeaderboard({
                     key={participant.id} 
                     className={getRowStyle(index, isCurrentUser)}
                   >
-                    <td className="py-4 px-4 md:px-6 whitespace-nowrap">
+                    <td className="py-3 px-3 whitespace-nowrap">
                       <div className="flex items-center">
                         <RankIndicator rank={participant.displayRank || index + 1} />
                       </div>
                     </td>
-                    <td className="py-4 px-4 md:px-6 whitespace-nowrap">
+                    <td className="py-3 px-3 whitespace-nowrap">
                       <div className="flex items-center group relative">
-                        <span className="font-medium text-base md:text-lg truncate max-w-[180px] md:max-w-[250px]" title={participant.name}>{participant.name}</span>
+                        <span className="font-medium text-sm truncate max-w-[150px] sm:max-w-[180px] md:max-w-[250px]" title={participant.name}>{participant.name}</span>
                         {isCurrentUser && (
                           <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary text-white">
                             You
                           </span>
                         )}
-                        <div className="absolute left-0 bottom-full hidden group-hover:block bg-gray-800 text-white text-sm rounded px-2 py-1 z-50">
+                        <div className="absolute left-0 bottom-full hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 z-50">
                           {participant.name}
                         </div>
                       </div>
                     </td>
                     {showTeams && (
-                      <td className="py-4 px-4 md:px-6 whitespace-nowrap text-gray-700 group relative">
-                        <span className="truncate block text-base md:text-lg max-w-[120px] md:max-w-[180px]" title={participant.team}>{participant.team}</span>
-                        <div className="absolute left-0 bottom-full hidden group-hover:block bg-gray-800 text-white text-sm rounded px-2 py-1 z-50">
+                      <td className="py-3 px-3 whitespace-nowrap text-gray-700 group relative">
+                        <span className="truncate block text-sm max-w-[100px] sm:max-w-[120px] md:max-w-[180px]" title={participant.team}>{participant.team}</span>
+                        <div className="absolute left-0 bottom-full hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 z-50">
                           {participant.team}
                         </div>
                       </td>
                     )}
-                    <td className="py-4 px-4 md:px-6 whitespace-nowrap text-right font-bold text-xl md:text-2xl text-primary">
+                    <td className="py-3 px-3 whitespace-nowrap text-right font-bold text-lg text-primary">
                       {participant.score}
                     </td>
                   </tr>
@@ -455,22 +455,22 @@ export default function EnhancedLeaderboard({
         </div>
       )}
       
-      {/* Team rankings tab */}
+      {/* Team rankings tab - IMPROVED OVERFLOW HANDLING */}
       {activeTab === 'team' && teamScores && teamScores.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-gray-200">
-          <table className="min-w-full divide-y divide-gray-200 table-fixed">
-            <thead className="bg-gray-50">
+        <div className="overflow-x-auto overflow-y-auto max-h-[60vh] rounded-lg border border-gray-200">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                <th scope="col" className="w-[15%] py-4 px-4 md:px-6 text-left text-base md:text-lg font-bold uppercase tracking-wider text-primary">
+                <th scope="col" className="w-[60px] py-3 px-3 text-left text-sm font-bold uppercase tracking-wider text-primary">
                   Rank
                 </th>
-                <th scope="col" className="w-[40%] py-4 px-4 md:px-6 text-left text-base md:text-lg font-bold uppercase tracking-wider text-primary">
+                <th scope="col" className="w-[40%] py-3 px-3 text-left text-sm font-bold uppercase tracking-wider text-primary">
                   Team
                 </th>
-                <th scope="col" className="w-[15%] py-4 px-4 md:px-6 text-center text-base md:text-lg font-bold uppercase tracking-wider text-primary">
+                <th scope="col" className="w-[70px] py-3 px-3 text-center text-sm font-bold uppercase tracking-wider text-primary">
                   Members
                 </th>
-                <th scope="col" className="w-[30%] py-4 px-4 md:px-6 text-right text-base md:text-lg font-bold uppercase tracking-wider text-primary">
+                <th scope="col" className="w-[80px] py-3 px-3 text-right text-sm font-bold uppercase tracking-wider text-primary">
                   Score
                 </th>
               </tr>
@@ -483,31 +483,31 @@ export default function EnhancedLeaderboard({
                     key={team.name} 
                     className={getRowStyle(index, isUserTeam)}
                   >
-                    <td className="py-4 px-4 md:px-6 whitespace-nowrap">
+                    <td className="py-3 px-3 whitespace-nowrap">
                       <div className="flex items-center">
                         <RankIndicator rank={index + 1} />
                       </div>
                     </td>
-                    <td className="py-4 px-4 md:px-6 whitespace-nowrap">
+                    <td className="py-3 px-3 whitespace-nowrap">
                       <div className="flex items-center group relative">
-                        <span className="font-medium text-base md:text-lg truncate max-w-[180px] md:max-w-[250px]" title={team.name}>{team.name}</span>
+                        <span className="font-medium text-sm truncate max-w-[150px] sm:max-w-[180px] md:max-w-[250px]" title={team.name}>{team.name}</span>
                         {isUserTeam && (
                           <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary text-white">
                             Your Team
                           </span>
                         )}
-                        <div className="absolute left-0 bottom-full hidden group-hover:block bg-gray-800 text-white text-sm rounded px-2 py-1 z-50">
+                        <div className="absolute left-0 bottom-full hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 z-50">
                           {team.name}
                         </div>
                       </div>
                     </td>
-                    <td className="py-4 px-4 md:px-6 whitespace-nowrap text-center">
-                      <span className="text-base md:text-lg text-gray-700">{team.memberCount}</span>
+                    <td className="py-3 px-3 whitespace-nowrap text-center">
+                      <span className="text-sm text-gray-700">{team.memberCount}</span>
                     </td>
-                    <td className="py-4 px-4 md:px-6 whitespace-nowrap text-right">
+                    <td className="py-3 px-3 whitespace-nowrap text-right">
                       <div className="flex flex-col items-end">
-                        <span className="font-bold text-xl md:text-2xl text-primary">{team.totalScore}</span>
-                        <span className="text-gray-500 text-sm md:text-base">Avg: {team.averageScore}</span>
+                        <span className="font-bold text-lg text-primary">{team.totalScore}</span>
+                        <span className="text-gray-500 text-xs">Avg: {team.averageScore}</span>
                       </div>
                     </td>
                   </tr>
@@ -518,7 +518,7 @@ export default function EnhancedLeaderboard({
         </div>
       )}
       {activeTab === 'team' && (!teamScores || teamScores.length === 0) && (
-        <div className="p-8 text-center bg-gray-50 rounded-lg border border-gray-200">
+        <div className="p-6 text-center bg-gray-50 rounded-lg border border-gray-200">
           <FaUsers className="mx-auto text-4xl text-gray-300 mb-3" />
           <p className="text-gray-500">No teams available</p>
         </div>

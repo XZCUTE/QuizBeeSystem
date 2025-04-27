@@ -9,6 +9,30 @@ import toast from "react-hot-toast"
 import QuizController from "@/components/quiz/QuizController"
 import useSound from "@/hooks/useSound"
 import SoundButton from "@/components/SoundButton"
+import { FaHistory } from "react-icons/fa"
+
+// Component to display history button
+function HistoryButton({ quizCode }) {
+  const navigate = useNavigate();
+  const sound = useSound({ pageType: 'host' });
+  
+  const handleClick = () => {
+    sound.playClick();
+    // Open in new tab instead of navigating in the current tab
+    window.open(`/history?quizId=${quizCode}`, '_blank', 'noopener,noreferrer');
+  };
+  
+  return (
+    <button
+      onClick={handleClick}
+      className="fixed top-4 right-4 z-50 bg-white rounded-full p-3 shadow-md text-primary hover:bg-primary hover:text-white transition-colors duration-300 border-2 border-primary/30"
+      title="View Quiz History"
+      onMouseEnter={() => sound.playHover()}
+    >
+      <FaHistory className="text-xl" />
+    </button>
+  );
+}
 
 export default function Host() {
   const navigate = useNavigate()
@@ -159,6 +183,13 @@ export default function Host() {
         sound.playError();
         return;
       }
+    } else if (currentQuestion.type === "true-false") {
+      // For true-false, ensure the correct answer is either 0 (true) or 1 (false)
+      if (currentQuestion.correctAnswer !== 0 && currentQuestion.correctAnswer !== 1) {
+        toast.error("Please select either True or False as the correct answer");
+        sound.playError();
+        return;
+      }
     } else if (currentQuestion.type === "fill-in-blank" && !currentQuestion.correctAnswer) {
       toast.error("Please enter the correct answer");
       sound.playError();
@@ -296,6 +327,11 @@ export default function Host() {
         ))}
       </div>
 
+      {/* Show history button for all steps except create-questions */}
+      {quizCode && step !== "create-questions" && (
+        <HistoryButton quizCode={quizCode} />
+      )}
+
       {step === "create-questions" && (
         <div className={`max-w-3xl mx-auto transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
           <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
@@ -323,7 +359,7 @@ export default function Host() {
                       <div>
                         <span className="font-bold">#{index + 1}</span> {q.text}
                         <div className="text-sm text-gray-500 mt-1">
-                          {q.type === "multiple-choice" ? "Multiple Choice" : "Fill in the Blank"} | 
+                          {q.type === "multiple-choice" ? "Multiple Choice" : q.type === "true-false" ? "True or False" : "Fill in the Blank"} | 
                           {q.timer}s | {q.points} pts | {q.difficulty}
                         </div>
                       </div>
@@ -364,12 +400,19 @@ export default function Host() {
                 onChange={(e) => setCurrentQuestion({ 
                   ...currentQuestion, 
                   type: e.target.value,
-                  options: e.target.value === "fill-in-blank" ? [] : ["", "", "", ""],
-                  correctAnswer: e.target.value === "fill-in-blank" ? "" : 0
+                  options: e.target.value === "fill-in-blank" 
+                    ? [] 
+                    : e.target.value === "true-false"
+                      ? ["True", "False"] 
+                      : ["", "", "", ""],
+                  correctAnswer: e.target.value === "fill-in-blank" 
+                    ? "" 
+                    : 0
                 })}
                 className="w-full p-2 border rounded"
               >
                 <option value="multiple-choice">Multiple Choice</option>
+                <option value="true-false">True or False</option>
                 <option value="fill-in-blank">Fill in the Blank</option>
               </select>
             </div>
@@ -396,6 +439,34 @@ export default function Host() {
                       />
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+            
+            {currentQuestion.type === "true-false" && (
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Select the correct answer
+                </label>
+                <div className="space-y-2">
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      checked={currentQuestion.correctAnswer === 0}
+                      onChange={() => setCurrentQuestion({ ...currentQuestion, correctAnswer: 0 })}
+                      className="mr-2"
+                    />
+                    <div className="w-full p-2 border rounded bg-gray-50">True</div>
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      type="radio"
+                      checked={currentQuestion.correctAnswer === 1}
+                      onChange={() => setCurrentQuestion({ ...currentQuestion, correctAnswer: 1 })}
+                      className="mr-2"
+                    />
+                    <div className="w-full p-2 border rounded bg-gray-50">False</div>
+                  </div>
                 </div>
               </div>
             )}

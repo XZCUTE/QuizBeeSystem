@@ -12,7 +12,7 @@ export default function WinnerCelebration({ quizId, onBack }) {
   const [topWinners, setTopWinners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showConfetti, setShowConfetti] = useState(true);
+  const [showConfetti, setShowConfetti] = useState(false);
   const navigate = useNavigate();
 
   // Debug logging
@@ -172,7 +172,7 @@ export default function WinnerCelebration({ quizId, onBack }) {
         />
       )}
       
-      <div className="mb-6 text-center">
+      <div className="mb-4 text-center">
         <h2 className="text-3xl font-bold mb-2 animate-pulse text-primary">
           🏆 Quiz Complete! 🏆
         </h2>
@@ -181,18 +181,18 @@ export default function WinnerCelebration({ quizId, onBack }) {
         </p>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Top winners display */}
-        <div className="bg-white shadow-lg rounded-xl p-6 border-4 border-primary/20">
-          <h3 className="text-2xl font-bold mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent text-center">
+        <div className="bg-white shadow-lg rounded-xl p-4 border-4 border-primary/20">
+          <h3 className="text-2xl font-bold mb-3 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent text-center">
             Champions
           </h3>
           
-          <div className="space-y-8">
+          <div className="space-y-6">
             {topWinners.map((winner, index) => (
               <div key={winner.id} className="relative">
                 {/* Award icons */}
-                <div className="absolute -left-3 -top-3 w-12 h-12 flex items-center justify-center rounded-full shadow-lg z-10"
+                <div className="absolute -left-3 -top-3 w-10 h-10 flex items-center justify-center rounded-full shadow-lg z-10"
                   style={{
                     background: index === 0 
                       ? 'linear-gradient(135deg, #FFD700, #FFC107)' 
@@ -201,11 +201,11 @@ export default function WinnerCelebration({ quizId, onBack }) {
                         : 'linear-gradient(135deg, #CD7F32, #B87333)'
                   }}
                 >
-                  <span className="text-white text-xl font-bold">{index + 1}</span>
-          </div>
+                  <span className="text-white text-lg font-bold">{index + 1}</span>
+                </div>
           
-                <div className={`transform transition duration-500 hover:-translate-y-1 hover:shadow-xl
-                  p-4 rounded-lg border-2
+                <div className={`transform transition duration-500 hover:-translate-y-1 hover:shadow-lg
+                  p-3 rounded-lg border-2
                   ${index === 0 
                     ? 'bg-yellow-50 border-yellow-300 shadow-yellow-100' 
                     : index === 1 
@@ -214,59 +214,58 @@ export default function WinnerCelebration({ quizId, onBack }) {
                   }`}
                 >
                   <div className="relative group">
-                    <h4 className="text-xl font-bold mb-1 truncate" title={winner.name}>
+                    <h4 className="text-lg font-bold mb-1 truncate" title={winner.name}>
                       {winner.name}
                     </h4>
-                    <div className="absolute left-0 -bottom-6 hidden group-hover:block bg-gray-800 text-white text-sm rounded px-2 py-1 z-50 w-full max-w-xs">
+                    <div className="absolute left-0 -bottom-6 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 z-50 w-full max-w-xs">
                       {winner.name}
-          </div>
-        </div>
+                    </div>
+                  </div>
         
                   {winner.team && (
                     <div className="relative group">
-                      <p className="text-gray-600 mb-2 truncate" title={`Team: ${winner.team}`}>
+                      <p className="text-gray-600 mb-2 truncate text-sm" title={`Team: ${winner.team}`}>
                         Team: {winner.team}
                       </p>
-                      <div className="absolute left-0 -bottom-6 hidden group-hover:block bg-gray-800 text-white text-sm rounded px-2 py-1 z-50">
+                      <div className="absolute left-0 -bottom-6 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 z-50">
                         Team: {winner.team}
-            </div>
-          </div>
-        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center mt-2">
-                    <span className="text-gray-600 text-sm">Final Score</span>
-                    <span className="font-bold text-2xl text-primary">{winner.score}</span>
-      </div>
-            </div>
-            </div>
+                    <span className="text-gray-600 text-xs">Final Score</span>
+                    <span className="font-bold text-xl text-primary">{winner.score}</span>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         </div>
         
-        {/* Full leaderboard */}
-        <div>
-          <EnhancedLeaderboard 
-            quizId={quizId} 
-            showTeams={true}
-            animateEntrance={true}
-          />
+        {/* Full leaderboard - FIXED DISPLAY ISSUES */}
+        <div className="bg-white shadow-lg rounded-xl p-4 overflow-hidden h-full flex flex-col">
+          <h3 className="text-lg font-bold mb-2 text-center text-primary">
+            Leaderboard
+          </h3>
+          <div className="overflow-auto flex-grow" style={{ maxHeight: "400px" }}>
+            <EnhancedLeaderboard 
+              quizId={quizId} 
+              showTeams={true}
+              animateEntrance={true}
+              compact={false}
+            />
+          </div>
         </div>
       </div>
       
-      <div className="text-center mt-10 mb-6">
-        <h3 className="text-xl font-semibold text-blue-700">
+      <div className="text-center mt-6 mb-4">
+        <h3 className="text-lg font-semibold text-blue-700">
           Thank you all for participating!
         </h3>
       </div>
       
       {/* Navigation buttons */}
-      <div className="flex justify-center space-x-4 mt-6 mb-10">
-        <Button 
-          onClick={() => setShowConfetti(!showConfetti)} 
-          variant="secondary" 
-          className="px-4 py-2"
-        >
-          {showConfetti ? "Hide Confetti" : "Show Confetti"}
-        </Button>
+      <div className="flex justify-center space-x-4 mt-4 mb-6">
         {onBack && (
           <Button onClick={onBack} variant="secondary" className="px-4 py-2">
             Back to Results

@@ -397,21 +397,19 @@ export default function Participant() {
           
           {/* Leaderboard section */}
           <div className="h-full flex flex-col">
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 mb-4">
+            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-4 mb-4 h-full flex flex-col">
               <h3 className="text-xl md:text-2xl font-bold mb-3 text-center text-primary">Leaderboard</h3>
               
-              <div className="w-full overflow-x-auto overflow-y-auto" style={{ 
-                maxHeight: "min(70vh, 600px)"
+              <div className="flex-grow overflow-x-auto overflow-y-auto" style={{ 
+                maxHeight: "400px"
               }}>
-                <div className="min-w-full text-base md:text-lg">
-                  <EnhancedLeaderboard 
-                    quizId={quizCode} 
-                    participantId={participantId} 
-                    showTeams={true}
-                    animateEntrance={false}
-                    compact={false}
-                  />
-                </div>
+                <EnhancedLeaderboard 
+                  quizId={quizCode} 
+                  participantId={participantId} 
+                  showTeams={true}
+                  animateEntrance={false}
+                  compact={false}
+                />
               </div>
             </div>
           </div>
