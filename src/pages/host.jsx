@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { db } from "@/firebase/config"
 import { ref, push, set, onValue, remove, get } from "firebase/database"
@@ -7,36 +7,11 @@ import Button from "@/components/Button"
 import Input from "@/components/Input"
 import toast from "react-hot-toast"
 import QuizController from "@/components/quiz/QuizController"
-import useSound from "@/hooks/useSound"
-import SoundButton from "@/components/SoundButton"
-import { FaHistory } from "react-icons/fa"
-
-// Component to display history button
-function HistoryButton({ quizCode }) {
-  const navigate = useNavigate();
-  const sound = useSound({ pageType: 'host' });
-  
-  const handleClick = () => {
-    sound.playClick();
-    // Open in new tab instead of navigating in the current tab
-    window.open(`/history?quizId=${quizCode}`, '_blank', 'noopener,noreferrer');
-  };
-  
-  return (
-    <button
-      onClick={handleClick}
-      className="fixed top-4 right-4 z-50 bg-white rounded-full p-3 shadow-md text-primary hover:bg-primary hover:text-white transition-colors duration-300 border-2 border-primary/30"
-      title="View Quiz History"
-      onMouseEnter={() => sound.playHover()}
-    >
-      <FaHistory className="text-xl" />
-    </button>
-  );
-}
+import HistoryButton from "@/components/HistoryButton"
 
 export default function Host() {
   const navigate = useNavigate()
-  const [step, setStep] = useState("create-questions") // create-questions, view-participants, quiz-started
+  const [step, setStep] = useState("create-questions") // create-questions, view-participants, countdown, quiz-started
   const [quizCode, setQuizCode] = useState("")
   const [quiz, setQuiz] = useState({
     title: "",
@@ -55,12 +30,8 @@ export default function Host() {
   const [participants, setParticipants] = useState([])
   const [countdown, setCountdown] = useState(0)
   const [isLoaded, setIsLoaded] = useState(false)
-  const sound = useSound({ 
-    pageType: 'host', 
-    step,
-    playBackgroundMusic: true,
-    playEntranceSound: true
-  })
+  const [quizCompleted, setQuizCompleted] = useState(false)
+  const countdownIntervalRef = useRef(null) // Ref to store interval ID
 
   // Generate random positions for background particles
   const generateParticles = (count) => {
@@ -98,11 +69,6 @@ export default function Host() {
             ...participantsData[key]
           }));
           
-          // Play a sound when a new participant joins
-          if (participantsArray.length > participants.length) {
-            sound.playSuccess();
-          }
-          
           setParticipants(participantsArray);
         } else {
           setParticipants([]);
@@ -114,8 +80,14 @@ export default function Host() {
       const quizUnsubscribe = onValue(quizRef, (snapshot) => {
         if (snapshot.exists()) {
           const quizData = snapshot.val();
-          if (quizData.status === "active" && step === "view-participants") {
+          // Handle transitions to active state
+          if (quizData.status === "active" && (step === "view-participants" || step === "countdown")) {
             setStep("quiz-started");
+          }
+          
+          // Update countdown value if in countdown state
+          if (quizData.status === "countdown" && quizData.countdownValue !== undefined) {
+            setCountdown(quizData.countdownValue);
           }
         }
       });
@@ -128,18 +100,33 @@ export default function Host() {
     }
     
     return () => clearTimeout(timer);
-  }, [quizCode, step, participants.length, sound]);
+  }, [quizCode, step, participants.length]);
+
+  // Check if the quiz is completed when the component mounts or quizCode changes
+  useEffect(() => {
+    if (quizCode) {
+      const quizRef = ref(db, `quizzes/${quizCode}`);
+      const unsubscribe = onValue(quizRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const quizData = snapshot.val();
+          if (quizData.status === "completed") {
+            setQuizCompleted(true);
+          }
+        }
+      });
+      
+      return () => unsubscribe();
+    }
+  }, [quizCode]);
 
   const handleCreateQuiz = () => {
     if (!quiz.title) {
       toast.error("Please enter a quiz title");
-      sound.playError();
       return;
     }
     
     if (quiz.questions.length === 0) {
       toast.error("Please add at least one question");
-      sound.playError();
       return;
     }
     
@@ -155,8 +142,6 @@ export default function Host() {
       status: "waiting", // waiting, active, completed
     });
     
-    sound.playSuccess();
-    sound.play('transition');
     toast.success(`Quiz created! Code: ${newQuizCode}`);
     setStep("view-participants");
   }
@@ -164,7 +149,6 @@ export default function Host() {
   const handleAddQuestion = () => {
     if (!currentQuestion.text) {
       toast.error("Question text is required");
-      sound.playError();
       return;
     }
     
@@ -173,26 +157,22 @@ export default function Host() {
       const filledOptions = currentQuestion.options.filter(opt => opt.trim() !== "");
       if (filledOptions.length < 2) {
         toast.error("Please add at least 2 options");
-        sound.playError();
         return;
       }
       
       // Check if correct answer is selected
       if (currentQuestion.correctAnswer === null) {
         toast.error("Please select the correct answer");
-        sound.playError();
         return;
       }
     } else if (currentQuestion.type === "true-false") {
       // For true-false, ensure the correct answer is either 0 (true) or 1 (false)
       if (currentQuestion.correctAnswer !== 0 && currentQuestion.correctAnswer !== 1) {
         toast.error("Please select either True or False as the correct answer");
-        sound.playError();
         return;
       }
     } else if (currentQuestion.type === "fill-in-blank" && !currentQuestion.correctAnswer) {
       toast.error("Please enter the correct answer");
-      sound.playError();
       return;
     }
     
@@ -213,7 +193,6 @@ export default function Host() {
       difficulty: "easy"
     });
     
-    sound.playSuccess();
     toast.success("Question added");
   }
 
@@ -222,14 +201,12 @@ export default function Host() {
       ...quiz,
       questions: quiz.questions.filter(q => q.id !== id)
     });
-    sound.play('click');
     toast.success("Question removed");
   }
 
   const handleStartQuiz = async () => {
     if (participants.length === 0) {
       toast.error("No participants have joined yet");
-      sound.playError();
       return;
     }
     
@@ -245,43 +222,65 @@ export default function Host() {
       
       const currentQuizData = snapshot.val();
       
-      // Preserve the participants data while updating other properties
+      // Set the quiz to countdown state first
       await set(quizRef, {
         ...currentQuizData,  // Keep all existing data, especially participants
         title: quiz.title,
         questions: quiz.questions,
-        status: "active",
-        currentQuestionIndex: 0,
+        status: "countdown",  // Use a new status for countdown
+        countdownValue: 3,    // Start with 3
         startedAt: new Date().toISOString()
       });
       
-      console.log("Starting quiz with participants:", currentQuizData.participants);
+      console.log("Starting countdown with participants:", currentQuizData.participants);
       
-      // Start countdown
+      // Set local state to countdown
+      setStep("countdown");
       setCountdown(3);
-      sound.play('countdown');
       
-      const countdownInterval = setInterval(() => {
-        setCountdown(prev => {
-          // Play countdown sound for each tick
-          if (prev > 1) {
-            sound.play('countdown');
-          } else if (prev === 1) {
-            sound.play('countdownFinish');
+      // Clear any existing interval
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
+      
+      // Handle the countdown timer
+      countdownIntervalRef.current = setInterval(async () => {
+        // Decrement local countdown
+        setCountdown(prevCount => {
+          const newCount = prevCount - 1;
+          
+          // If countdown reaches 0, clear interval and move to quiz-started
+          if (newCount <= 0) {
+            if (countdownIntervalRef.current) {
+              clearInterval(countdownIntervalRef.current);
+              countdownIntervalRef.current = null;
+            }
+            
+            // Update Firebase to active status after countdown
+            set(quizRef, {
+              ...currentQuizData,
+              title: quiz.title,
+              questions: quiz.questions,
+              status: "active",
+              countdownValue: 0,
+              currentQuestionIndex: 0,
+              startedAt: new Date().toISOString()
+            });
+            
+            // Transition to quiz-started state
+            setStep("quiz-started");
+          } else {
+            // Update countdown value in Firebase for participants
+            set(ref(db, `quizzes/${quizCode}/countdownValue`), newCount);
           }
           
-          if (prev <= 1) {
-            clearInterval(countdownInterval);
-            setStep("quiz-started");
-            return 0;
-          }
-          return prev - 1;
+          return newCount;
         });
       }, 1000);
+      
     } catch (error) {
       console.error("Error starting quiz:", error);
       toast.error("Failed to start quiz");
-      sound.playError();
     }
   }
 
@@ -292,45 +291,82 @@ export default function Host() {
   }
 
   const moveToNextQuestion = () => {
-    sound.playClick();
   };
 
   const showResults = () => {
-    sound.playSuccess();
   };
 
+  // Clean up the interval when component unmounts
+  useEffect(() => {
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    };
+  }, []);
+
   return (
-    <section className="min-h-screen w-full flex flex-col items-center justify-center overflow-hidden relative">
-      {/* Background Image */}
-      <div className="fixed inset-0 -z-10">
-        <img 
-          src="https://i.imgur.com/NSkjBnJ.jpeg" 
-          className="w-full h-full object-cover" 
-          alt="background" 
-        />
+    <>
+      {/* History Button - only visible after quiz ends */}
+      <HistoryButton quizCode={quizCode} visible={quizCompleted} />
+    
+      <div className={`min-h-screen relative overflow-hidden ${isLoaded ? "opacity-100" : "opacity-0"} transition-opacity duration-500`}>
         
-        {/* Floating particles */}
-        {particles.map((particle) => (
+        {/* Background Image */}
+        <div className="fixed inset-0 z-0">
+          <img 
+            src="https://i.imgur.com/NSkjBnJ.jpeg" 
+            className="w-full h-full object-cover" 
+            alt="background" 
+          />
+        </div>
+        
+        {/* Background overlay for better readability */}
+        <div className="fixed inset-0 bg-gradient-to-br from-gray-900/30 to-gray-800/30 z-0"></div>
+        
+        {/* Background particles */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none z-10">
+          {particles.map(particle => (
           <div
             key={particle.id}
-            className="absolute rounded-full bg-white"
+              className="absolute rounded-full bg-primary animate-float"
             style={{
-              width: `${particle.size}px`,
-              height: `${particle.size}px`,
+                width: particle.size,
+                height: particle.size,
               left: particle.left,
               top: particle.top,
               opacity: particle.opacity,
-              animation: `float ${particle.animationDuration} infinite ease-in-out`,
-              animationDelay: particle.animationDelay,
+                animationDuration: particle.animationDuration,
+                animationDelay: particle.animationDelay
             }}
           />
         ))}
-      </div>
-
-      {/* Show history button for all steps except create-questions */}
-      {quizCode && step !== "create-questions" && (
-        <HistoryButton quizCode={quizCode} />
-      )}
+        </div>
+        
+        {/* Countdown overlay */}
+        {step === "countdown" && (
+          <div className="fixed inset-0 flex items-center justify-center z-50">
+            <div className="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-sm"></div>
+            <div className="relative z-10 text-blue-500 text-9xl font-bold animate-pulse" style={{ textShadow: '0 0 15px #06BEE1' }}>
+              {countdown}
+            </div>
+          </div>
+        )}
+        
+        {/* Main content */}
+        <div className="relative z-20 min-h-screen">
+          <div className="container mx-auto px-4 py-4">
+          
+          {/* Remove the duplicate header when in quiz-started step */}
+          {step !== "quiz-started" && (
+            <div className="text-center py-6">
+              <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>
+                ICCT Quiz Bee System
+              </h1>
+                <h2 className="text-xl text-gray-200">Host Dashboard</h2>
+            </div>
+          )}
 
       {step === "create-questions" && (
         <div className={`max-w-3xl mx-auto transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
@@ -531,34 +567,31 @@ export default function Host() {
               </div>
             </div>
             
-            <SoundButton 
+            <Button 
               onClick={handleAddQuestion} 
               className="w-full bg-gradient-to-r from-primary to-secondary text-white py-3 rounded-lg font-bold text-lg shadow-md hover:shadow-lg transform hover:scale-[1.02] transition-all"
             >
               Add Question
-            </SoundButton>
+            </Button>
           </div>
           
           <div className="flex justify-between">
             <Button 
               onClick={() => {
-                sound.playClick();
                 navigate("/");
               }} 
               variant="secondary"
               className="bg-white/80 text-primary border-2 border-primary/50 px-6 py-3 rounded-lg font-bold shadow-md hover:bg-white hover:shadow-lg transition-all"
-              onMouseEnter={() => sound.playHover()}
             >
               Back to Home
             </Button>
-            <SoundButton 
+            <Button 
               onClick={handleCreateQuiz} 
               disabled={quiz.questions.length === 0}
               className={`bg-gradient-to-r from-primary to-secondary text-white px-8 py-3 rounded-lg font-bold shadow-md transition-all ${quiz.questions.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg hover:scale-105'}`}
-              onMouseEnter={() => sound.playHover()}
             >
               Create Quiz
-            </SoundButton>
+            </Button>
           </div>
         </div>
       )}
@@ -622,51 +655,32 @@ export default function Host() {
           <div className="flex justify-between">
             <Button 
               onClick={() => {
-                sound.playClick();
                 navigate("/");
               }} 
               variant="secondary"
               className="bg-white/80 text-primary border-2 border-primary/50 px-6 py-3 rounded-lg font-bold shadow-md hover:bg-white hover:shadow-lg transition-all"
-              onMouseEnter={() => sound.playHover()}
             >
               Cancel Quiz
             </Button>
-            <SoundButton 
+            <Button 
               onClick={handleStartQuiz} 
               disabled={participants.length === 0}
               className={`bg-gradient-to-r from-primary to-secondary text-white px-8 py-3 rounded-lg font-bold shadow-md transition-all ${participants.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg hover:scale-105 animate-pulse-slow'}`}
-              onMouseEnter={() => participants.length > 0 && sound.playHover()}
             >
               Start Quiz
-            </SoundButton>
+            </Button>
           </div>
         </div>
       )}
       
       {step === "quiz-started" && (
-        <div className="w-full max-w-4xl transition-all duration-700 ease-out transform">
-          <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-16 mx-auto" alt="ICCT School Logo" />
+        <div className="w-full max-w-4xl transition-all duration-700 ease-out transform mx-auto">
           <QuizController quizId={quizCode} />
         </div>
       )}
-      
-      {countdown > 0 && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-50">
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-primary to-accent rounded-full animate-pulse" 
-                style={{ 
-                  filter: 'blur(20px)',
-                  transform: 'scale(1.2)'
-                }}
-            ></div>
-            <div className="bg-white rounded-full w-40 h-40 flex items-center justify-center relative">
-              <span className="text-8xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent animate-pulse">
-                {countdown}
-              </span>
-            </div>
           </div>
         </div>
-      )}
-    </section>
+      </div>
+    </>
   )
 } 

@@ -4,6 +4,8 @@ import { useEffect } from "react"
 import { useSocketContext } from "@/context/socket"
 import toast from "react-hot-toast"
 
+export { default as History } from './history';
+
 export default function Home() {
   const navigate = useNavigate()
   const { socket } = useSocketContext()

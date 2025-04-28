@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 
 /**
  * A more reliable centralized timer component that works with Firebase Realtime Database
- * with automatic periodic synchronization
+ * with automatic periodic synchronization and immediate start
  * @param {Object} props
  * @param {string} props.quizId - ID of the current quiz
  * @param {string} props.questionId - ID of the current question
@@ -29,9 +29,9 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
   const syncWithServer = async (silent = false) => {
     if (!quizId || !questionId) return;
     
-    // If we're already syncing or it's been less than 1 second since last sync, skip
+    // If we're already syncing or it's been less than 500ms since last sync, skip
     const now = Date.now();
-    if (isSyncing || (now - lastSyncTimeRef.current < 1000 && silent)) {
+    if (isSyncing || (now - lastSyncTimeRef.current < 500 && silent)) {
       return;
     }
     
@@ -55,15 +55,12 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
         if (timerData.isActive && timerData.startTime && timerData.duration) {
           const endTime = timerData.startTime + (timerData.duration * 1000);
           
-          // Only restart the countdown if the end time is significantly different
-          // or if we don't have an existing end time
-          if (!timerEndTime || Math.abs(endTime - timerEndTime) > 1000) {
-            setTimerEndTime(endTime);
-            setIsActive(true);
-            
-            // Start the local countdown
-            startLocalCountdown(endTime);
-          }
+          // Update the timer state immediately
+          setTimerEndTime(endTime);
+          setIsActive(true);
+          
+          // Start the local countdown
+          startLocalCountdown(endTime);
         } else if (!timerData.isActive) {
           // Timer is paused or stopped
           setIsActive(false);
@@ -76,7 +73,7 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
           }
         }
       } else {
-        // No timer data exists
+        // Initialize timer with default values if no data exists
         setIsActive(false);
         setTimeLeft(initialTime);
         
@@ -95,17 +92,17 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
     }
   };
   
-  // Setup auto-sync interval
+  // Setup auto-sync interval with more frequent updates
   useEffect(() => {
     if (!quizId || !questionId) return;
     
-    // Initial sync
-    syncWithServer(true);
+    // Initial sync immediately when component mounts
+    syncWithServer(false);
     
-    // Set up auto-sync every 5 seconds
+    // Set up auto-sync every 2 seconds for more responsive updates
     syncIntervalRef.current = setInterval(() => {
       syncWithServer(true);
-    }, 5000); // Auto-sync every 5 seconds
+    }, 2000); // More frequent auto-sync
     
     return () => {
       if (syncIntervalRef.current) {
@@ -133,7 +130,7 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
     };
   }, [quizId, questionId]);
   
-  // Setup timer listener
+  // Setup timer listener for real-time updates
   useEffect(() => {
     if (!quizId || !questionId) return;
     
@@ -145,21 +142,17 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
         const timerData = snapshot.val();
         timerDataRef.current = timerData;
         
-        // Calculate end time once and store it
+        // Handle active timer
         if (timerData.isActive && timerData.startTime && timerData.duration) {
           // Calculate when the timer will end
           const endTime = timerData.startTime + (timerData.duration * 1000);
           
-          // Check if there's a significant change in end time
-          const shouldUpdateTimer = !timerEndTime || Math.abs(endTime - timerEndTime) > 1000;
+          // Always update the timer when there's a change
+          setTimerEndTime(endTime);
+          setIsActive(true);
           
-          if (shouldUpdateTimer) {
-            setTimerEndTime(endTime);
-            setIsActive(true);
-            
-            // Start the local countdown
-            startLocalCountdown(endTime);
-          }
+          // Start or update the local countdown
+          startLocalCountdown(endTime);
         } else if (!timerData.isActive) {
           // Timer is paused or stopped
           setIsActive(false);
@@ -195,9 +188,9 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
         intervalRef.current = null;
       }
     };
-  }, [quizId, questionId, initialTime, timerEndTime]);
+  }, [quizId, questionId, initialTime]);
   
-  // Function to start the local countdown timer
+  // Function to start the local countdown timer with improved accuracy
   const startLocalCountdown = (endTime) => {
     // Clear any existing interval
     if (intervalRef.current) {
@@ -216,7 +209,7 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
       return;
     }
     
-    // Start a new interval that updates more frequently
+    // Start a new interval that updates more frequently for smoother countdown
     intervalRef.current = setInterval(() => {
       const now = Date.now();
       const secondsRemaining = Math.max(0, Math.floor((endTime - now) / 1000));
@@ -229,7 +222,7 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
         setIsActive(false);
         if (onTimeUp) onTimeUp();
       }
-    }, 250); // Update 4 times per second for more accurate timing
+    }, 100); // Update 10 times per second for smoother timing
   };
   
   // Calculate percentage for visual display
@@ -254,7 +247,7 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
   useEffect(() => {
     const handleOnline = () => {
       // When coming back online, force a sync with the server
-      syncWithServer(true);
+      syncWithServer(false); // Not silent for immediate update
     };
     
     // Listen for online event
@@ -271,7 +264,7 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         // User came back to the tab, force a sync with the server
-        syncWithServer(true);
+        syncWithServer(false); // Not silent for immediate update
       }
     };
     
@@ -298,7 +291,7 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
           <span className="text-6xl font-bold">{timeLeft}</span>
           {!isActive && (
             <span className="text-sm ml-1 opacity-80">
-              {timeLeft === initialTime ? "(not started)" : "(paused)"}
+              (paused)
             </span>
           )}
         </motion.div>
@@ -313,7 +306,7 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
           }`}
           initial={{ width: "100%" }}
           animate={{ width: `${percentage}%` }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.25 }}
         />
       </div>
       
@@ -325,7 +318,7 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
         {isSyncing ? "Syncing..." : (
           <>
             <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-            <span>Auto-syncing</span>
+            <span>Synced</span>
           </>
         )}
       </div>

@@ -4,9 +4,9 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { PlayerContextProvider } from '@/context/player';
 import { SocketContextProvider } from '@/context/socket';
 import { QuizProvider } from '@/context/quiz';
-import { AudioProvider } from '@/contexts/AudioContext';
 import App from '@/App';
 import '@/styles/globals.css';
+import '@/styles/print.css';
 import Toaster from '@/components/Toaster';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -14,12 +14,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <SocketContextProvider>
       <PlayerContextProvider>
         <QuizProvider>
-          <AudioProvider>
-            <Router>
-              <App />
-            </Router>
-            <Toaster />
-          </AudioProvider>
+          <Router>
+            <App />
+          </Router>
+          <Toaster />
         </QuizProvider>
       </PlayerContextProvider>
     </SocketContextProvider>

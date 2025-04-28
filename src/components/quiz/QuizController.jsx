@@ -12,7 +12,6 @@ import TieBreakerStats from "./TieBreakerStats";
 import TiedParticipants from "./TiedParticipants";
 import toast from "react-hot-toast";
 import CentralizedTimer from "./CentralizedTimer";
-import { useAudio } from "@/contexts/AudioContext";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function QuizController({ quizId }) {
@@ -29,7 +28,6 @@ export default function QuizController({ quizId }) {
   const [teams, setTeams] = useState([]);
   const [timer, setTimer] = useState(null);
   const [timerRunning, setTimerRunning] = useState(false);
-  const { playSound } = useAudio();
   const [winnersLoading, setWinnersLoading] = useState(false);
 
   // Load quiz data
@@ -100,50 +98,41 @@ export default function QuizController({ quizId }) {
     };
   }, [quizId]);
 
-  // Modified startTimer function to ensure it works reliably
+  // Optimized startTimer function to ensure it works reliably and starts instantly
   const startTimer = useCallback(async (seconds) => {
     try {
       if (!quiz || !quiz.questions) return;
       
       const questionId = quiz.questions[currentQuestionIndex].id;
       
-      // First, ensure any existing timer is properly stopped
+      // Ensure any existing timer is properly stopped
       await update(ref(db, `quizzes/${quizId}/questionTimers/${questionId}`), {
         isActive: false
       });
       
-      // Also update legacy timer for backward compatibility
+      // Update legacy timer for backward compatibility
       await update(ref(db, `quizzes/${quizId}`), {
         timerRunning: false
       });
       
-      // Toast notification to indicate the timer will start shortly
-      toast.success("Timer starting in 3 seconds...");
+      // Get the current timestamp - use server timestamp for better sync
+      const currentTime = Date.now();
       
-      // Add a 3-second delay before starting the timer
-      setTimeout(async () => {
-        // Get the current timestamp
-        const currentTime = Date.now();
-        
-        // Set the centralized timer in the database
-        await set(ref(db, `quizzes/${quizId}/questionTimers/${questionId}`), {
-          duration: seconds,
-          startTime: currentTime,
-          isActive: true
-        });
-        
-        // Also update legacy timer for backward compatibility
-        await update(ref(db, `quizzes/${quizId}`), {
-          timer: seconds,
-          timerRunning: true
-        });
-        
-        // Play sound only when explicitly starting timer
-        playSound('click');
-        
-        // Update local state to reflect timer running
-        setTimerRunning(true);
-      }, 3000); // 3-second delay
+      // Set the centralized timer in the database and immediately activate it
+      await set(ref(db, `quizzes/${quizId}/questionTimers/${questionId}`), {
+        duration: seconds,
+        startTime: currentTime,
+        isActive: true
+      });
+      
+      // Update legacy timer for backward compatibility
+      await update(ref(db, `quizzes/${quizId}`), {
+        timer: seconds,
+        timerRunning: true
+      });
+      
+      // Update local state to reflect timer running
+      setTimerRunning(true);
       
       return true;
     } catch (error) {
@@ -151,12 +140,10 @@ export default function QuizController({ quizId }) {
       toast.error("Failed to start timer");
       return false;
     }
-  }, [quiz, currentQuestionIndex, quizId, playSound, setTimerRunning]);
+  }, [quiz, currentQuestionIndex, quizId, setTimerRunning]);
 
-  // Modified next question handler to auto-start timer with a delay
+  // Optimized next question handler to start timer immediately
   const handleNextQuestion = async () => {
-    playSound('click');
-    
     if (!quiz || !quiz.questions) return;
     
     const nextIndex = currentQuestionIndex + 1;
@@ -174,30 +161,36 @@ export default function QuizController({ quizId }) {
       return;
     }
     
-    // Update the current question index in the database
-    await update(ref(db, `quizzes/${quizId}`), {
-      currentQuestionIndex: nextIndex,
-      // Mark current time as when the question started
-      currentQuestionStartedAt: serverTimestamp()
-    });
-    
-    // Update local state
-    setCurrentQuestionIndex(nextIndex);
-    
-    // Reset timer state
-    setTimerRunning(false);
-    setTimer(null);
-    
-    toast.success(`Moving to Question ${nextIndex + 1}`);
-    
-    // Start timer with a delay
-    if (quiz.questions[nextIndex]) {
-      const questionTimer = quiz.questions[nextIndex].timer || 30;
-      await startTimer(questionTimer);
+    // Update the current question index in the database and start timer immediately
+    try {
+      // Update question index
+      await update(ref(db, `quizzes/${quizId}`), {
+        currentQuestionIndex: nextIndex,
+        // Mark current time as when the question started
+        currentQuestionStartedAt: serverTimestamp()
+      });
+      
+      // Update local state
+      setCurrentQuestionIndex(nextIndex);
+      
+      // Reset timer state
+      setTimerRunning(false);
+      setTimer(null);
+      
+      toast.success(`Moving to Question ${nextIndex + 1}`);
+      
+      // Start timer immediately for the next question - no delays
+      if (quiz.questions[nextIndex]) {
+        const questionTimer = quiz.questions[nextIndex].timer || 30;
+        await startTimer(questionTimer);
+      }
+    } catch (error) {
+      console.error("Error moving to next question:", error);
+      toast.error("Failed to move to next question");
     }
   };
 
-  // Update the way we handle the auto-start effect with a delay
+  // Optimized auto-start effect to start timer immediately without delay
   useEffect(() => {
     if (quiz && quiz.status === "active" && !timerRunning) {
       // Make sure we have a current question that isn't already being timed
@@ -212,7 +205,7 @@ export default function QuizController({ quizId }) {
             
             // Only auto-start if there's no active timer for this question
             if (!snapshot.exists() || !snapshot.val().isActive) {
-              // Start timer with a delay
+              // Start timer immediately - no delays
               const questionTimer = currentQ.timer || 30;
               await startTimer(questionTimer);
             }
@@ -221,15 +214,14 @@ export default function QuizController({ quizId }) {
           }
         };
         
+        // Execute immediately
         checkForExistingTimer();
       }
     }
   }, [quiz, currentQuestionIndex, timerRunning, quizId, startTimer]);
 
-  // Add a function to start the quiz - modified to start with a delay
+  // Optimized function to start the quiz immediately without delays
   const handleStartQuiz = async () => {
-    playSound('click');
-    
     try {
       // Update quiz status to active if it's not already
       if (!quiz || quiz.status === 'active') return;
@@ -240,7 +232,7 @@ export default function QuizController({ quizId }) {
         startedAt: serverTimestamp()
       });
       
-      // Start timer with a delay for the first question
+      // Start timer immediately for the first question - no delays
       if (quiz.questions && quiz.questions.length > 0) {
         const questionTimer = quiz.questions[0].timer || 30;
         await startTimer(questionTimer);
@@ -250,7 +242,7 @@ export default function QuizController({ quizId }) {
       toast.success("Quiz started!");
     } catch (error) {
       console.error("Error starting quiz:", error);
-      toast.error("Failed to start the quiz");
+      toast.error("Failed to start quiz");
     }
   };
 
@@ -347,8 +339,6 @@ export default function QuizController({ quizId }) {
 
   // Improved stopTimer function to ensure it works reliably
   const stopTimer = async () => {
-    playSound('click');
-    
     try {
       if (!quiz || !quiz.questions) return;
       
@@ -384,7 +374,7 @@ export default function QuizController({ quizId }) {
       // Update local state immediately
       setTimerRunning(false);
     
-    toast.success('Timer stopped');
+      toast.success('Timer stopped');
     } catch (error) {
       console.error("Error stopping timer:", error);
       toast.error("Failed to stop timer");
@@ -423,6 +413,15 @@ export default function QuizController({ quizId }) {
   if (quizCompleted) {
     return (
       <div className="p-4 max-w-4xl mx-auto">
+        {/* Add consistent header */}
+        <div className="text-center py-6 mb-4">
+          <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-16 mx-auto" alt="ICCT School Logo" />
+          <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>
+            ICCT Quiz Bee System
+          </h1>
+          <h2 className="text-xl text-gray-200">Host Dashboard</h2>
+        </div>
+        
         {showWinners ? (
           <WinnerCelebration 
             quizId={quizId} 
@@ -521,6 +520,15 @@ export default function QuizController({ quizId }) {
   if (quiz && quiz.status !== "active" && !quizCompleted) {
     return (
       <div className="p-4 max-w-4xl mx-auto">
+        {/* Add consistent header */}
+        <div className="text-center py-6 mb-4">
+          <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-16 mx-auto" alt="ICCT School Logo" />
+          <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>
+            ICCT Quiz Bee System
+          </h1>
+          <h2 className="text-xl text-gray-200">Host Dashboard</h2>
+        </div>
+        
         <div className="bg-white rounded-lg shadow-lg p-8 text-center">
           <h1 className="text-3xl font-bold text-primary mb-6">{quiz.title}</h1>
           <p className="mb-8 text-gray-700">Ready to start the quiz? Click the button below to begin.</p>
@@ -541,6 +549,15 @@ export default function QuizController({ quizId }) {
     <div className="p-4 max-w-4xl mx-auto">
       {quiz.status === "active" && currentQuestion && (
         <>
+          {/* Add a proper centered header that matches the host page */}
+          <div className="text-center py-6 mb-4">
+            <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-16 mx-auto" alt="ICCT School Logo" />
+            <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>
+              ICCT Quiz Bee System
+            </h1>
+            <h2 className="text-xl text-gray-200">Host Dashboard</h2>
+          </div>
+          
           {/* Controller Header */}
           {renderHeader()}
           

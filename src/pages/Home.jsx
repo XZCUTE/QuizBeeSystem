@@ -3,17 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import Button from '@/components/Button';
 import { useSocketContext } from '@/context/socket';
 import toast from 'react-hot-toast';
-import useSound from '@/hooks/useSound';
 
 export default function Home() {
   const navigate = useNavigate();
   const { socket } = useSocketContext();
   const [isLoaded, setIsLoaded] = useState(false);
-  const sound = useSound({ 
-    pageType: 'home', 
-    playBackgroundMusic: true,
-    playEntranceSound: true
-  });
 
   useEffect(() => {
     // Set loaded state after a small delay for entrance animation
@@ -23,24 +17,19 @@ export default function Home() {
     
     socket.on('game:errorMessage', (message) => {
       toast.error(message);
-      sound.playError();
     });
 
     return () => {
       socket.off('game:errorMessage');
       clearTimeout(timer);
     };
-  }, [socket, sound]);
+  }, [socket]);
 
   const handleHostClick = () => {
-    sound.playClick();
-    sound.play('transition');
     navigate('/host');
   };
 
   const handleParticipantClick = () => {
-    sound.playClick();
-    sound.play('transition');
     navigate('/participant');
   };
 
@@ -114,7 +103,6 @@ export default function Home() {
           <Button 
             onClick={handleHostClick} 
             className="btn-primary py-10 text-3xl font-bold relative overflow-hidden animated-card hover-glow transition-transform duration-300 hover:scale-105"
-            onMouseEnter={() => sound.playHover()}
           >
             <span className="relative z-10">HOST</span>
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -translate-x-full animate-shimmer-slow"></div>
@@ -123,7 +111,6 @@ export default function Home() {
           <Button 
             onClick={handleParticipantClick} 
             className="btn-secondary py-10 text-3xl font-bold relative overflow-hidden animated-card hover-glow transition-transform duration-300 hover:scale-105 delay-200"
-            onMouseEnter={() => sound.playHover()}
           >
             <span className="relative z-10">PARTICIPANT</span>
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -translate-x-full animate-shimmer-slow"></div>

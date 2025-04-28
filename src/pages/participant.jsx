@@ -9,10 +9,11 @@ import toast from "react-hot-toast"
 import QuizQuestion from "@/components/quiz/QuizQuestion"
 import EnhancedLeaderboard from "@/components/quiz/EnhancedLeaderboard"
 import FullScreenConfetti from "@/components/FullScreenConfetti"
+import HistoryButton from "@/components/HistoryButton"
 
 export default function Participant() {
   const navigate = useNavigate()
-  const [step, setStep] = useState("enter-code") // enter-code, enter-info, waiting, quiz-active, quiz-completed
+  const [step, setStep] = useState("enter-code") // enter-code, enter-info, waiting, countdown, quiz-active, quiz-completed
   const [quizCode, setQuizCode] = useState("")
   const [name, setName] = useState("")
   const [team, setTeam] = useState("")
@@ -57,7 +58,7 @@ export default function Participant() {
 
   useEffect(() => {
     // If we have a quiz code and are in waiting or quiz-active state
-    if (quizCode && (step === "waiting" || step === "quiz-active" || step === "quiz-completed")) {
+    if (quizCode && (step === "waiting" || step === "quiz-active" || step === "countdown" || step === "quiz-completed")) {
       // Listen for quiz status changes
       const quizRef = ref(db, `quizzes/${quizCode}`);
       const unsubscribe = onValue(quizRef, (snapshot) => {
@@ -65,20 +66,21 @@ export default function Participant() {
           const quizData = snapshot.val();
           setQuiz(quizData);
           
-          // If the quiz status changes to active and we're in waiting state
-          if (quizData.status === "active" && step === "waiting") {
-            // Start countdown
-            setCountdown(3);
-            const countdownInterval = setInterval(() => {
-              setCountdown(prev => {
-                if (prev <= 1) {
-                  clearInterval(countdownInterval);
-                  setStep("quiz-active");
-                  return 0;
-                }
-                return prev - 1;
-              });
-            }, 1000);
+          // Handle countdown state
+          if (quizData.status === "countdown" && step === "waiting") {
+            setStep("countdown");
+            setCountdown(quizData.countdownValue || 3);
+          }
+          // Listen for countdown value changes
+          else if (quizData.status === "countdown" && step === "countdown") {
+            setCountdown(quizData.countdownValue || 3);
+          }
+          
+          // If the quiz status changes to active
+          if (quizData.status === "active") {
+            if (step === "waiting" || step === "countdown") {
+              setStep("quiz-active");
+            }
           }
           
           // If quiz is completed, transition to completed state
@@ -449,34 +451,55 @@ export default function Participant() {
   };
 
   return (
-    <section className="min-h-screen w-full flex flex-col items-center justify-center overflow-hidden relative">
-      {/* Background Image */}
-      <div className="fixed inset-0 -z-10">
-        <img 
-          src="https://i.imgur.com/2qmTd0f.jpeg" 
-          className="w-full h-full object-cover" 
-          alt="background" 
-        />
-        
-        {/* Floating particles */}
-        {particles.map((particle) => (
-          <div
-            key={particle.id}
-            className="absolute rounded-full bg-white"
-            style={{
-              width: `${particle.size}px`,
-              height: `${particle.size}px`,
-              left: particle.left,
-              top: particle.top,
-              opacity: particle.opacity,
-              animation: `float ${particle.animationDuration} infinite ease-in-out`,
-              animationDelay: particle.animationDelay,
-            }}
+    <>
+      {/* History Button - only visible after quiz ends */}
+      <HistoryButton quizCode={quizCode} visible={step === "quiz-completed"} />
+    
+      <div className={`min-h-screen relative overflow-hidden ${isLoaded ? "opacity-100" : "opacity-0"} transition-opacity duration-500`}>
+        {/* Background Image */}
+        <div className="fixed inset-0 z-0">
+          <img 
+            src="https://i.imgur.com/NSkjBnJ.jpeg" 
+            className="w-full h-full object-cover" 
+            alt="background" 
           />
-        ))}
-      </div>
-      
-      <div className="container mx-auto px-4 py-0 min-h-screen flex flex-col justify-center items-center">
+        </div>
+        
+        {/* Background overlay for better readability */}
+        <div className="fixed inset-0 bg-gradient-to-br from-gray-900/30 to-gray-800/30 z-0"></div>
+        
+        {/* Background particles */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none z-10">
+          {particles.map(particle => (
+            <div
+              key={particle.id}
+              className="absolute rounded-full bg-primary animate-float"
+              style={{
+                width: particle.size,
+                height: particle.size,
+                left: particle.left,
+                top: particle.top,
+                opacity: particle.opacity,
+                animationDuration: particle.animationDuration,
+                animationDelay: particle.animationDelay
+              }}
+            />
+          ))}
+        </div>
+        
+        {/* Countdown overlay */}
+        {step === "countdown" && (
+          <div className="fixed inset-0 flex items-center justify-center z-50">
+            <div className="absolute inset-0 bg-black bg-opacity-60 backdrop-blur-sm"></div>
+            <div className="relative z-10 text-blue-500 text-9xl font-bold animate-pulse" style={{ textShadow: '0 0 15px #06BEE1' }}>
+              {countdown}
+            </div>
+          </div>
+        )}
+        
+        {/* Main content */}
+        <div className="relative z-20 min-h-screen">
+          <div className="container mx-auto px-4 py-4 min-h-screen flex flex-col justify-center items-center">
         {step === "enter-code" && (
           <div className={`max-w-md mx-auto transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
             <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
@@ -661,25 +684,9 @@ export default function Participant() {
         )}
         
         {step === "quiz-completed" && renderQuizCompletedView()}
-        
-        {countdown > 0 && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm z-50">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-primary to-accent rounded-full animate-pulse" 
-                  style={{ 
-                    filter: 'blur(20px)',
-                    transform: 'scale(1.2)'
-                  }}
-              ></div>
-              <div className="bg-white rounded-full w-40 h-40 flex items-center justify-center relative">
-                <span className="text-8xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent animate-pulse">
-                  {countdown}
-                </span>
-              </div>
-            </div>
           </div>
-        )}
       </div>
-    </section>
+      </div>
+    </>
   )
 } 
