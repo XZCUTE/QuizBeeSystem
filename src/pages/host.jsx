@@ -8,6 +8,7 @@ import Input from "@/components/Input"
 import toast from "react-hot-toast"
 import QuizController from "@/components/quiz/QuizController"
 import HistoryButton from "@/components/HistoryButton"
+import usePreventQuizExit from "@/hooks/usePreventQuizExit"
 
 export default function Host() {
   const navigate = useNavigate()
@@ -32,6 +33,18 @@ export default function Host() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [quizCompleted, setQuizCompleted] = useState(false)
   const countdownIntervalRef = useRef(null) // Ref to store interval ID
+
+  // Prevent page exit during active quiz session
+  const isActiveQuiz = step === "quiz-started" || step === "countdown" || step === "view-participants";
+  const customExitMessage = quizCompleted 
+    ? "Are you sure you want to leave? The quiz results page will close."
+    : "Warning: Leaving this page will end the quiz session for all participants. Are you sure you want to exit?";
+  
+  // Use the prevention hook with different messages based on quiz state
+  usePreventQuizExit(
+    isActiveQuiz || quizCompleted,
+    customExitMessage
+  );
 
   // Generate random positions for background particles
   const generateParticles = (count) => {
@@ -306,6 +319,120 @@ export default function Host() {
     };
   }, []);
 
+  // Add new function for handling quiz export
+  const handleExportQuiz = () => {
+    // Validate quiz data
+    if (!quiz.title) {
+      toast.error("Please enter a quiz title");
+      return;
+    }
+    
+    if (quiz.questions.length === 0) {
+      toast.error("Please add at least one question to export");
+      return;
+    }
+    
+    try {
+      // Create quiz data object for export
+      const quizData = {
+        title: quiz.title,
+        questions: quiz.questions,
+        exportedAt: new Date().toISOString(),
+        version: "1.0"
+      };
+      
+      // Convert to JSON string
+      const jsonData = JSON.stringify(quizData, null, 2);
+      
+      // Create blob and download file
+      const blob = new Blob([jsonData], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      
+      // Create download link and trigger click
+      const link = document.createElement("a");
+      link.href = url;
+      // Generate filename with quiz title and timestamp
+      const safeTitle = quiz.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      link.download = `${safeTitle}_quiz_${new Date().getTime()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success("Quiz exported successfully!");
+    } catch (error) {
+      console.error("Error exporting quiz:", error);
+      toast.error("Failed to export quiz");
+    }
+  };
+  
+  // Add new function for handling quiz import
+  const handleImportQuiz = (event) => {
+    const file = event.target.files[0];
+    if (!file) {
+      return;
+    }
+    
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target.result);
+        
+        // Validate the imported data
+        if (!importedData.title || !importedData.questions || !Array.isArray(importedData.questions)) {
+          toast.error("Invalid quiz file format");
+          return;
+        }
+        
+        // Ensure each question has the required fields
+        const validQuestions = importedData.questions.map(q => {
+          // Ensure each question has an ID, or generate a new one
+          const questionWithId = { ...q, id: q.id || uuidv4() };
+          
+          // Validate and set defaults for required fields
+          return {
+            ...questionWithId,
+            type: q.type || "multiple-choice",
+            options: q.options || (q.type === "multiple-choice" ? ["", "", "", ""] : []),
+            correctAnswer: q.correctAnswer !== undefined ? q.correctAnswer : "",
+            timer: q.timer || 30,
+            points: q.points || 100,
+            difficulty: q.difficulty || "easy"
+          };
+        });
+        
+        // Update quiz state with imported data
+        setQuiz({
+          title: importedData.title,
+          questions: validQuestions
+        });
+        
+        toast.success(`Quiz "${importedData.title}" imported with ${validQuestions.length} questions`);
+        
+        // Reset file input
+        event.target.value = null;
+      } catch (error) {
+        console.error("Error importing quiz:", error);
+        toast.error("Failed to import quiz: Invalid file format");
+        
+        // Reset file input
+        event.target.value = null;
+      }
+    };
+    
+    reader.onerror = () => {
+      toast.error("Error reading file");
+      
+      // Reset file input
+      event.target.files = null;
+    };
+    
+    reader.readAsText(file);
+  };
+
   return (
     <>
       {/* History Button - only visible after quiz ends */}
@@ -395,7 +522,7 @@ export default function Host() {
                       <div>
                         <span className="font-bold">#{index + 1}</span> {q.text}
                         <div className="text-sm text-gray-500 mt-1">
-                          {q.type === "multiple-choice" ? "Multiple Choice" : q.type === "true-false" ? "True or False" : "Fill in the Blank"} | 
+                          {q.type === "multiple-choice" ? "Multiple Choice" : q.type === "true-false" ? "True or False" : "Identification"} | 
                           {q.timer}s | {q.points} pts | {q.difficulty}
                         </div>
                       </div>
@@ -449,7 +576,7 @@ export default function Host() {
               >
                 <option value="multiple-choice">Multiple Choice</option>
                 <option value="true-false">True or False</option>
-                <option value="fill-in-blank">Fill in the Blank</option>
+                <option value="fill-in-blank">Identification</option>
               </select>
             </div>
             
@@ -569,29 +696,65 @@ export default function Host() {
             
             <Button 
               onClick={handleAddQuestion} 
-              className="w-full bg-gradient-to-r from-primary to-secondary text-white py-3 rounded-lg font-bold text-lg shadow-md hover:shadow-lg transform hover:scale-[1.02] transition-all"
+              className="w-full bg-gradient-to-r from-primary to-secondary text-white py-3 rounded-lg font-bold text-lg shadow-md hover:shadow-lg transform hover:scale-[1.02] transition-all mb-6"
             >
               Add Question
             </Button>
-          </div>
-          
-          <div className="flex justify-between">
-            <Button 
-              onClick={() => {
-                navigate("/");
-              }} 
-              variant="secondary"
-              className="bg-white/80 text-primary border-2 border-primary/50 px-6 py-3 rounded-lg font-bold shadow-md hover:bg-white hover:shadow-lg transition-all"
-            >
-              Back to Home
-            </Button>
-            <Button 
-              onClick={handleCreateQuiz} 
-              disabled={quiz.questions.length === 0}
-              className={`bg-gradient-to-r from-primary to-secondary text-white px-8 py-3 rounded-lg font-bold shadow-md transition-all ${quiz.questions.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg hover:scale-105'}`}
-            >
-              Create Quiz
-            </Button>
+            
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <Button 
+                onClick={() => {
+                  navigate("/");
+                }} 
+                variant="secondary"
+                className="bg-white/80 text-primary border-2 border-primary/50 px-6 py-3 rounded-lg font-bold shadow-md hover:bg-white hover:shadow-lg transition-all"
+              >
+                Back to Home
+              </Button>
+              
+              <div className="flex gap-2">
+                {/* Import Quiz Button */}
+                <div className="relative">
+                  <Button 
+                    onClick={() => document.getElementById('import-quiz-input').click()}
+                    className="bg-white/80 text-primary border-2 border-primary/50 px-6 py-3 rounded-lg font-bold shadow-md hover:bg-white hover:shadow-lg transition-all flex items-center gap-2"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Import Quiz
+                  </Button>
+                  <input
+                    id="import-quiz-input"
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportQuiz}
+                    style={{ display: 'none' }}
+                  />
+                </div>
+                
+                {/* Export Quiz Button */}
+                <Button 
+                  onClick={handleExportQuiz} 
+                  disabled={quiz.questions.length === 0}
+                  className={`bg-white/80 text-primary border-2 border-primary/50 px-6 py-3 rounded-lg font-bold shadow-md hover:bg-white hover:shadow-lg transition-all flex items-center gap-2 ${quiz.questions.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 3.293a1 1 0 011.414 0L10 5.586l2.293-2.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  Export Quiz
+                </Button>
+                
+                {/* Create Quiz Button */}
+                <Button 
+                  onClick={handleCreateQuiz} 
+                  disabled={quiz.questions.length === 0}
+                  className={`bg-gradient-to-r from-primary to-secondary text-white px-8 py-3 rounded-lg font-bold shadow-md transition-all ${quiz.questions.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg hover:scale-105'}`}
+                >
+                  Start Quiz
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

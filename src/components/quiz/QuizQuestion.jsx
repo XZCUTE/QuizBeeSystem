@@ -55,20 +55,25 @@ const difficultyDetails = {
 };
 
 export default function QuizQuestion({ question, quizId, participantId, isHost }) {
-  // Remove the local timer state and use the centralized timer
-  const [localSelectedAnswer, setLocalSelectedAnswer] = useState(null);
-  const [submittedAnswer, setSubmittedAnswer] = useState(null);
+  const [localSelectedAnswer, setLocalSelectedAnswer] = useState("");
+  const [submittedAnswer, setSubmittedAnswer] = useState("");
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
   const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
-  const [answerLocked, setAnswerLocked] = useState(false);
+  const [answerLocked, setAnswerLocked] = useState(true);
+  const [timerExpired, setTimerExpired] = useState(false);
   const [scoreAnimation, setScoreAnimation] = useState({ show: false, score: 0 });
   const [difficultyTooltip, setDifficultyTooltip] = useState(false);
-  const [timerExpired, setTimerExpired] = useState(false);
-  
-  // Store references to Firebase listeners for proper cleanup
+
+  // New state to track local confirmation for fill-in-blank answers
+  const [answerLocallyConfirmed, setAnswerLocallyConfirmed] = useState(false);
+  // Store pending answer data for fill-in-blank questions
+  const [pendingAnswer, setPendingAnswer] = useState(null);
+
+  // References to keep track of Firebase listeners
   const correctAnswerListenerRef = useRef(null);
   const userAnswerListenerRef = useRef(null);
   const timerListenerRef = useRef(null);
+  const submitPendingAnswersListenerRef = useRef(null);
   
   // Get the effective answer (either submitted or local selection)
   const selectedAnswer = isAnswerSubmitted ? submittedAnswer : localSelectedAnswer;
@@ -98,13 +103,15 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
     };
     
     // Reset all states when question changes
-    setLocalSelectedAnswer(null);
-    setSubmittedAnswer(null);
+    setLocalSelectedAnswer("");
+    setSubmittedAnswer("");
     setIsAnswerSubmitted(false);
     setShowCorrectAnswer(false);
-    setAnswerLocked(false);
+    setAnswerLocked(true);
     setTimerExpired(false);
     setScoreAnimation({ show: false, score: 0 });
+    setAnswerLocallyConfirmed(false); // Reset local confirmation state
+    setPendingAnswer(null); // Reset pending answer data
     
     // Check if participant already answered this question
     checkExistingAnswer();
@@ -124,6 +131,11 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
       if (timerListenerRef.current) {
         off(timerListenerRef.current);
         timerListenerRef.current = null;
+      }
+      
+      if (submitPendingAnswersListenerRef.current) {
+        off(submitPendingAnswersListenerRef.current);
+        submitPendingAnswersListenerRef.current = null;
       }
     };
   }, [quizId, question, participantId, isHost]);
@@ -150,6 +162,9 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
           if (remainingSeconds <= 0) {
             setAnswerLocked(true);
             setTimerExpired(true);
+            
+            // Remove auto-submission of fill-in-blank answers when timer expires
+            // Now answers will only be submitted when the host clicks "Reveal Answer"
           } else {
             // Timer is still running - ensure answers are unlocked
             if (!isAnswerSubmitted) {
@@ -166,6 +181,9 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
           // If timer explicitly marked as expired, set expired state
           if (timerData.expired) {
             setTimerExpired(true);
+            
+            // Remove auto-submission of fill-in-blank answers when timer expires
+            // Now answers will only be submitted when the host clicks "Reveal Answer"
           }
         }
       } else {
@@ -176,13 +194,15 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
       }
     });
     
-    // Listen for correct answer reveal
+    // Listen for correct answer reveal - use the specific path
     const correctAnswerRef = ref(db, `quizzes/${quizId}/questions/${question.id}/showCorrectAnswer`);
     correctAnswerListenerRef.current = correctAnswerRef;
     
     const correctAnswerListener = onValue(correctAnswerRef, (snapshot) => {
+      console.log("Received showCorrectAnswer update:", snapshot.exists() ? snapshot.val() : "does not exist");
       if (snapshot.exists() && snapshot.val() === true) {
         setShowCorrectAnswer(true);
+        console.log("Showing correct answer for question:", question.id);
       }
     });
     
@@ -190,7 +210,7 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
       off(timerRef, timerListener);
       off(correctAnswerRef, correctAnswerListener);
     };
-  }, [quizId, question]);
+  }, [quizId, question, pendingAnswer, isAnswerSubmitted]);
   
   // This effect ONLY sets up a listener for the CURRENT participant's OWN answers
   useEffect(() => {
@@ -213,6 +233,63 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
     };
   }, [quizId, question, participantId, isHost]);
 
+  // Add a new useEffect to listen for the submitPendingAnswers flag
+  useEffect(() => {
+    if (!quizId || !question || !question.id || isHost) return;
+    
+    // Listen for the submitPendingAnswers flag at the new path
+    const submitPendingAnswersRef = ref(db, `quizzes/${quizId}/pendingAnswerSubmissions/${question.id}`);
+    submitPendingAnswersListenerRef.current = submitPendingAnswersRef;
+    
+    const submitPendingAnswersListener = onValue(submitPendingAnswersRef, (snapshot) => {
+      if (snapshot.exists() && snapshot.val().submitPendingAnswers === true) {
+        console.log("Participant received submitPendingAnswers signal", pendingAnswer);
+        
+        // Only proceed if there's a valid pending answer for fill-in-blank questions
+        if (question.type === "fill-in-blank" && pendingAnswer && !isAnswerSubmitted) {
+          console.log("Submitting pending answer", pendingAnswer);
+          
+          submitAnswerToDatabase(
+            pendingAnswer.databaseAnswer, 
+            pendingAnswer.isCorrect, 
+            pendingAnswer.score, 
+            pendingAnswer.submissionTime
+          );
+          
+          // Update UI state to reflect the submitted answer
+          setIsAnswerSubmitted(true);
+          
+          // We keep answerLocallyConfirmed as true since it was already confirmed
+          // But we update the UI to show it's now been submitted to the database
+          toast.success(
+            "Your answer has been submitted!",
+            { 
+              duration: 2000,
+              icon: "🚀",
+              style: {
+                borderRadius: '10px',
+                background: '#333',
+                color: '#fff',
+              },
+            }
+          );
+        }
+        // If there's no pending answer or it's not a fill-in-blank question, just acknowledge
+        else if (!pendingAnswer && question.type === "fill-in-blank" && !isAnswerSubmitted) {
+          console.log("No pending answer to submit");
+          // Don't show any error message to the user - this is a normal case for unanswered questions
+        }
+      }
+    });
+    
+    return () => {
+      if (submitPendingAnswersListenerRef.current) {
+        off(submitPendingAnswersListenerRef.current, submitPendingAnswersListener);
+        submitPendingAnswersListenerRef.current = null;
+      }
+    };
+  }, [quizId, question, pendingAnswer, isAnswerSubmitted, isHost]);
+
   // Define a single function that handles both selection and submission for multiple-choice questions
   const handleSelectAnswer = (answer) => {
     // Don't allow selection if timer isn't active or has expired
@@ -228,17 +305,76 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
     }
   };
 
-  // Original submitAnswer function still used for fill-in-the-blank questions
+  // Function to send answer data to database (for fill-in-blank)
+  const submitAnswerToDatabase = async (databaseAnswer, isCorrect, score, submissionTime) => {
+    try {
+      // Save answer to database
+      const thisParticipantAnswerRef = ref(
+        db,
+        `quizzes/${quizId}/answers/${question.id}/${participantId}`
+      );
+      
+      // Update the answer in the database
+      await update(thisParticipantAnswerRef, {
+        answer: databaseAnswer, 
+        isCorrect,
+        score,
+        submittedAt: submissionTime,
+      });
+      
+      // Also update the participant's total score in the quiz
+      if (isCorrect && score > 0) {
+        // Get the current total score for this participant
+        const participantRef = ref(db, `quizzes/${quizId}/participants/${participantId}`);
+        const participantSnap = await get(participantRef);
+        
+        if (participantSnap.exists()) {
+          const participantData = participantSnap.val();
+          const currentTotalScore = participantData.score || 0;
+          const newTotalScore = currentTotalScore + score;
+          
+          // Update the participant's total score
+          await update(participantRef, {
+            score: newTotalScore,
+            lastUpdated: submissionTime
+          });
+        }
+      }
+      
+      // Show score animation for correct answers
+      if (isCorrect && score > 0) {
+        setScoreAnimation({
+          show: true,
+          score: score
+        });
+        
+        // Hide score animation after 2 seconds
+        setTimeout(() => {
+          setScoreAnimation({
+            show: false,
+            score: 0
+          });
+        }, 2000);
+      }
+      
+      // Show correct answer if enabled at the question level
+      if (question.showCorrectAnswer) {
+        setShowCorrectAnswer(true);
+      }
+    } catch (error) {
+      console.error("Error submitting answer:", error);
+      toast.error("Failed to submit answer. Please try again.");
+    }
+  };
+
+  // Modified submitAnswer function 
   const handleSubmitAnswer = async (answerValue = null) => {
     if (isAnswerSubmitted || answerLocked || timerExpired) return;
     
-    // Lock answer to prevent double submission
-    setAnswerLocked(true);
-    
-    // Get the actual answer value based on question type
+    // Get the actual answer value based on question type with type safety
     const finalAnswer = question.type === "multiple-choice" || question.type === "true-false"
       ? answerValue !== null ? answerValue : selectedAnswer
-      : localSelectedAnswer.trim();
+      : typeof localSelectedAnswer === 'string' ? localSelectedAnswer.trim() : "";
     
     // Convert letter option (A,B,C,D) to numeric index (0,1,2,3) for database storage
     let databaseAnswer = finalAnswer;
@@ -280,7 +416,42 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
       }
     }
     
+    // For fill-in-blank, we'll store the answer locally and wait for host to reveal
+    if (question.type === "fill-in-blank") {
+      // Store answer locally only
+      setPendingAnswer({
+        databaseAnswer,
+        isCorrect,
+        score,
+        submissionTime
+      });
+      
+      // Update local state to reflect pending submission
+      setAnswerLocallyConfirmed(true);
+      setSubmittedAnswer(finalAnswer);
+      
+      // Lock the input to prevent changes
+      setAnswerLocked(true);
+      
+      // Show toast that answer is saved locally
+      toast.success(
+        "Answer saved! It will be submitted when the host reveals the answer.",
+        { 
+          duration: 2000,
+          icon: "✅",
+          style: {
+            borderRadius: '10px',
+            background: '#333',
+            color: '#fff',
+          },
+        }
+      );
+      
+      return;
+    }
+    
     try {
+      // For multiple-choice/true-false, submit immediately
       // Save answer to database
       const thisParticipantAnswerRef = ref(
         db,
@@ -336,9 +507,7 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
       
       // Show toast notification that answer was submitted
       toast.success(
-        question.type === "multiple-choice" 
-          ? "Answer auto-submitted!" 
-          : "Answer submitted successfully!",
+        "Answer auto-submitted!",
         { 
           duration: 2000,
           icon: "🚀",
@@ -378,6 +547,9 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
   const handleTimerExpired = () => {
     setAnswerLocked(true);
     setTimerExpired(true);
+    
+    // Remove auto-submission of fill-in-blank answers
+    // Now fill-in-blank answers will only be submitted when the host clicks "Reveal Answer"
   };
 
   // If no question is provided, show a placeholder
@@ -485,7 +657,7 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
               ? "Multiple Choice" 
               : question.type === "true-false"
                 ? "True or False"
-                : "Fill in the blank"
+                : "Identification"
             }
           </div>
           {(question.type === "multiple-choice" || question.type === "true-false") && (
@@ -707,9 +879,14 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
         </div>
       )}
       
-      {/* Fill in the blank input field */}
+      {/* Identification input field */}
       {question.type === "fill-in-blank" && (
-        <div className="mt-6">
+        <div className="mt-4">
+          <div className="mb-2">
+            <div className="bg-primary/10 text-primary px-3 py-1 inline-block rounded-full text-sm font-semibold mb-2">
+              Identification
+            </div>
+          </div>
           <div className="relative">
             <input
               type="text"
@@ -722,7 +899,7 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
             />
             
             {/* Clear button */}
-            {localSelectedAnswer && !isAnswerSubmitted && (
+            {localSelectedAnswer && !isAnswerSubmitted && !answerLocked && !timerExpired && (
               <button 
                 onClick={() => setLocalSelectedAnswer("")} 
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
@@ -737,7 +914,14 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
           
           {/* Show correct answer after submission */}
           {showCorrectAnswer && (
-            <div className={`mt-4 p-3 rounded-lg ${isAnswerSubmitted && submittedAnswer && submittedAnswer.toLowerCase().trim() === question.correctAnswer.toLowerCase().trim() ? "bg-green-50 border border-green-500" : "bg-yellow-50 border border-yellow-500"}`}>
+            <div className={`mt-4 p-3 rounded-lg ${
+              isAnswerSubmitted && 
+              submittedAnswer && 
+              typeof submittedAnswer === 'string' && 
+              submittedAnswer.toLowerCase().trim() === question.correctAnswer.toLowerCase().trim() 
+                ? "bg-green-50 border border-green-500" 
+                : "bg-yellow-50 border border-yellow-500"
+            }`}>
               <p className="text-sm font-medium mb-1">Correct answer:</p>
               <p className="font-bold text-lg">
                 {question.correctAnswer}
@@ -747,18 +931,34 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
         </div>
       )}
       
-      {/* Submit button for fill-in-blank */}
-      {question.type === "fill-in-blank" && !isAnswerSubmitted && (
+      {/* Submit button for Identification */}
+      {question.type === "fill-in-blank" && !isAnswerSubmitted && !answerLocked && !timerExpired && (
         <div className="mt-6">
           <Button
             variant="primary"
-            className={`w-full py-3 text-lg ${!localSelectedAnswer ? "opacity-50 cursor-not-allowed" : ""}`}
+            className={`w-full py-3 text-lg ${!localSelectedAnswer || localSelectedAnswer.trim() === "" ? "opacity-50 cursor-not-allowed" : ""}`}
             onClick={() => handleSubmitAnswer(localSelectedAnswer)}
-            disabled={submittedAnswer || !localSelectedAnswer || answerLocked || timerExpired}
+            disabled={!localSelectedAnswer || localSelectedAnswer.trim() === ""}
           >
-            {submittedAnswer ? "Answer Submitted" : "Submit Answer"}
+            Save Answer
             <ArrowRightIcon className="ml-2 h-5 w-5" />
           </Button>
+          <p className="text-xs text-center mt-2 text-gray-500">
+            Your answer will be submitted when the host reveals the answer.
+          </p>
+        </div>
+      )}
+      
+      {/* Answer locally confirmed message */}
+      {question.type === "fill-in-blank" && answerLocallyConfirmed && !isAnswerSubmitted && (
+        <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+          <div className="flex items-center justify-center gap-2">
+            <CheckCircleIcon className="w-6 h-6 text-green-600" />
+            <p className="text-green-600 font-bold">Your answer has been saved!</p>
+          </div>
+          <p className="text-sm text-gray-600 mt-2">
+            The answer will be submitted when the host reveals the correct answer.
+          </p>
         </div>
       )}
       

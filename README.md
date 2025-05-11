@@ -4,7 +4,7 @@ A real-time quiz application built with React, Vite, and Firebase.
 
 ## Features
 
-- Create quizzes with multiple-choice or fill-in-the-blank questions
+- Create quizzes with multiple-choice or identification questions
 - Set timer, points, and difficulty for each question
 - Join quizzes with a 6-digit code
 - Real-time participant list and quiz synchronization

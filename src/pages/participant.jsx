@@ -10,6 +10,7 @@ import QuizQuestion from "@/components/quiz/QuizQuestion"
 import EnhancedLeaderboard from "@/components/quiz/EnhancedLeaderboard"
 import FullScreenConfetti from "@/components/FullScreenConfetti"
 import HistoryButton from "@/components/HistoryButton"
+import usePreventQuizExit from "@/hooks/usePreventQuizExit"
 
 export default function Participant() {
   const navigate = useNavigate()
@@ -26,6 +27,18 @@ export default function Participant() {
   const [score, setScore] = useState(0)
   const [topParticipants, setTopParticipants] = useState([])
   const [isLoaded, setIsLoaded] = useState(false)
+
+  // Prevent page exit during active quiz session
+  const isActiveSession = step === "quiz-active" || step === "countdown";
+  const customExitMessage = step === "quiz-completed" 
+    ? "Are you sure you want to leave? Your quiz results will no longer be visible."
+    : "Warning: Leaving this page will end your quiz session and you may lose your progress. Are you sure you want to exit?";
+  
+  // Use the prevention hook with different messages based on quiz state
+  usePreventQuizExit(
+    isActiveSession || step === "quiz-completed", 
+    customExitMessage
+  );
 
   // Generate random positions for background particles
   const generateParticles = (count) => {

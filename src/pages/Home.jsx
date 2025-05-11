@@ -29,6 +29,10 @@ export default function Home() {
     navigate('/host');
   };
 
+  const handleAudienceClick = () => {
+    navigate('/audience');
+  };
+
   const handleParticipantClick = () => {
     navigate('/participant');
   };
@@ -105,6 +109,14 @@ export default function Home() {
             className="btn-primary py-10 text-3xl font-bold relative overflow-hidden animated-card hover-glow transition-transform duration-300 hover:scale-105"
           >
             <span className="relative z-10">HOST</span>
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -translate-x-full animate-shimmer-slow"></div>
+          </Button>
+          
+          <Button 
+            onClick={handleAudienceClick} 
+            className="btn-secondary py-10 text-3xl font-bold relative overflow-hidden animated-card hover-glow transition-transform duration-300 hover:scale-105 delay-100"
+          >
+            <span className="relative z-10">AUDIENCE</span>
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent transform -translate-x-full animate-shimmer-slow"></div>
           </Button>
           

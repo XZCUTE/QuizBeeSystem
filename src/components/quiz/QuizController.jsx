@@ -28,7 +28,10 @@ export default function QuizController({ quizId }) {
   const [teams, setTeams] = useState([]);
   const [timer, setTimer] = useState(null);
   const [timerRunning, setTimerRunning] = useState(false);
+  const [timerPaused, setTimerPaused] = useState(false); // New state to track if timer is paused
   const [winnersLoading, setWinnersLoading] = useState(false);
+  // Debounce state to prevent rapid clicks
+  const [isProcessingTimerAction, setIsProcessingTimerAction] = useState(false);
 
   // Load quiz data
   useEffect(() => {
@@ -103,6 +106,13 @@ export default function QuizController({ quizId }) {
     try {
       if (!quiz || !quiz.questions) return;
       
+      // Prevent rapid clicks
+      if (isProcessingTimerAction) {
+        return;
+      }
+      
+      setIsProcessingTimerAction(true);
+      
       const questionId = quiz.questions[currentQuestionIndex].id;
       
       // Ensure any existing timer is properly stopped
@@ -122,7 +132,9 @@ export default function QuizController({ quizId }) {
       await set(ref(db, `quizzes/${quizId}/questionTimers/${questionId}`), {
         duration: seconds,
         startTime: currentTime,
-        isActive: true
+        isActive: true,
+        pausedAt: null,
+        pausedRemaining: null
       });
       
       // Update legacy timer for backward compatibility
@@ -133,23 +145,33 @@ export default function QuizController({ quizId }) {
       
       // Update local state to reflect timer running
       setTimerRunning(true);
+      setTimerPaused(false); // Reset paused state when starting a new timer
       
       return true;
     } catch (error) {
       console.error("Error starting timer:", error);
       toast.error("Failed to start timer");
       return false;
+    } finally {
+      // Reset processing state after a small delay
+      setTimeout(() => {
+        setIsProcessingTimerAction(false);
+      }, 500);
     }
-  }, [quiz, currentQuestionIndex, quizId, setTimerRunning]);
+  }, [quiz, currentQuestionIndex, quizId, setTimerRunning, isProcessingTimerAction]);
 
   // Optimized next question handler to start timer immediately
   const handleNextQuestion = async () => {
     if (!quiz || !quiz.questions) return;
     
+    console.log("[handleNextQuestion] Current index:", currentQuestionIndex, "Total questions:", quiz.questions.length);
+    
     const nextIndex = currentQuestionIndex + 1;
     
-    // Check if we've reached the end of the quiz
-    if (nextIndex >= quiz.questions.length) {
+    // Enhanced check for end of quiz with additional validation
+    if (!quiz.questions || nextIndex >= quiz.questions.length) {
+      console.log("[handleNextQuestion] Reached end of quiz. Ending quiz...");
+      
       // End the quiz
       await update(ref(db, `quizzes/${quizId}`), {
         status: "completed",
@@ -161,27 +183,69 @@ export default function QuizController({ quizId }) {
       return;
     }
     
-    // Update the current question index in the database and start timer immediately
+    // IMPORTANT: Refresh quiz data from database before proceeding to ensure questions array integrity
     try {
-      // Update question index
+      // First get fresh quiz data to ensure we have the proper structure
+      const quizRef = ref(db, `quizzes/${quizId}`);
+      const snapshot = await get(quizRef);
+      
+      if (!snapshot.exists()) {
+        console.error("[handleNextQuestion] Failed to retrieve quiz data");
+        toast.error("Failed to retrieve quiz data");
+        return;
+      }
+      
+      // Get refreshed quiz data
+      const refreshedQuizData = snapshot.val();
+      
+      // Validate questions array exists and is an array
+      if (!refreshedQuizData.questions || !Array.isArray(refreshedQuizData.questions)) {
+        console.error("[handleNextQuestion] Invalid questions array in quiz data");
+        toast.error("Quiz structure is invalid. Please refresh the page.");
+        return;
+      }
+      
+      // Ensure next index is valid
+      if (nextIndex >= refreshedQuizData.questions.length) {
+        console.log("[handleNextQuestion] Reached end of refreshed quiz. Ending quiz...");
+        
+        await update(ref(db, `quizzes/${quizId}`), {
+          status: "completed",
+          completedAt: new Date().toISOString()
+        });
+        
+        setQuizCompleted(true);
+        toast.success("Quiz completed!");
+        return;
+      }
+      
+      // Log the refreshed state
+      console.log("[handleNextQuestion] Refreshed quiz data - Questions count:", 
+        refreshedQuizData.questions.length,
+        "Next question index:", nextIndex,
+        "Questions type:", Array.isArray(refreshedQuizData.questions) ? "Array" : typeof refreshedQuizData.questions);
+      
+      // Update the current question index in the database and start timer immediately
       await update(ref(db, `quizzes/${quizId}`), {
         currentQuestionIndex: nextIndex,
         // Mark current time as when the question started
         currentQuestionStartedAt: serverTimestamp()
       });
       
-      // Update local state
+      // Update local state with refreshed data
+      setQuiz(refreshedQuizData);
       setCurrentQuestionIndex(nextIndex);
       
       // Reset timer state
       setTimerRunning(false);
+      setTimerPaused(false); // Reset paused state when moving to the next question
       setTimer(null);
       
       toast.success(`Moving to Question ${nextIndex + 1}`);
       
       // Start timer immediately for the next question - no delays
-      if (quiz.questions[nextIndex]) {
-        const questionTimer = quiz.questions[nextIndex].timer || 30;
+      if (refreshedQuizData.questions[nextIndex]) {
+        const questionTimer = refreshedQuizData.questions[nextIndex].timer || 30;
         await startTimer(questionTimer);
       }
     } catch (error) {
@@ -337,47 +401,148 @@ export default function QuizController({ quizId }) {
     };
   }, [quizId]);
 
-  // Improved stopTimer function to ensure it works reliably
+  // Improved stopTimer function to handle both pausing and resuming
   const stopTimer = async () => {
     try {
       if (!quiz || !quiz.questions) return;
       
-      const questionId = quiz.questions[currentQuestionIndex].id;
-      
-      // Get current timer state to save current time remaining
-      const timerRef = ref(db, `quizzes/${quizId}/questionTimers/${questionId}`);
-      const snapshot = await get(timerRef);
-      let remainingSeconds = 0;
-      
-      if (snapshot.exists()) {
-        const timerData = snapshot.val();
-        if (timerData.isActive && timerData.startTime && timerData.duration) {
-          const currentTime = Date.now();
-          const elapsedSeconds = Math.floor((currentTime - timerData.startTime) / 1000);
-          remainingSeconds = Math.max(0, timerData.duration - elapsedSeconds);
-        }
+      // Prevent rapid clicks that could cause race conditions
+      if (isProcessingTimerAction) {
+        return;
       }
       
-      // Update the timer to inactive but preserve the remaining time
-      await update(ref(db, `quizzes/${quizId}/questionTimers/${questionId}`), {
-        isActive: false,
-        duration: remainingSeconds, // Save remaining time for if the timer is restarted
-        pausedAt: Date.now()
+      setIsProcessingTimerAction(true);
+      
+      const questionId = quiz.questions[currentQuestionIndex].id;
+      const timerRef = ref(db, `quizzes/${quizId}/questionTimers/${questionId}`);
+      
+      // Get current timer state
+      const snapshot = await get(timerRef);
+      if (!snapshot.exists()) {
+        setIsProcessingTimerAction(false);
+        return;
+      }
+      
+      const timerData = snapshot.val();
+      
+      // If timer is active (running), we need to pause it
+      if (timerData.isActive) {
+        // Calculate remaining seconds
+        const currentTime = Date.now();
+        const elapsedSeconds = Math.floor((currentTime - timerData.startTime) / 1000);
+        const remainingSeconds = Math.max(0, timerData.duration - elapsedSeconds);
+        
+        // Update the timer to inactive but preserve the remaining time
+        await update(timerRef, {
+          isActive: false,
+          duration: remainingSeconds,
+          pausedAt: Date.now(),
+          pausedRemaining: remainingSeconds // Store for resuming
+        });
+        
+        // Also update legacy timer for backward compatibility
+        await update(ref(db, `quizzes/${quizId}`), {
+          timer: remainingSeconds,
+          timerRunning: false
+        });
+      
+        // Update local state immediately
+        setTimerRunning(false);
+        setTimerPaused(true);
+      
+        toast.success('Timer paused');
+      } 
+      // If timer is not active and we have a pausedRemaining value, resume it
+      else if (timerData.pausedRemaining > 0 || timerData.duration > 0) {
+        // Get the remaining time either from pausedRemaining or duration
+        const remainingSeconds = timerData.pausedRemaining || timerData.duration;
+        
+        // Get the current timestamp - use server timestamp for better sync
+        const currentTime = Date.now();
+        
+        // Resume the timer by setting it active again with the remaining time
+        await update(timerRef, {
+          isActive: true,
+          duration: remainingSeconds,
+          startTime: currentTime,
+          pausedAt: null,
+          pausedRemaining: null
+        });
+        
+        // Update legacy timer for backward compatibility
+        await update(ref(db, `quizzes/${quizId}`), {
+          timer: remainingSeconds,
+          timerRunning: true
+        });
+        
+        // Update local state
+        setTimerRunning(true);
+        setTimerPaused(false);
+        
+        toast.success('Timer resumed');
+      }
+    } catch (error) {
+      console.error("Error toggling timer:", error);
+      toast.error("Failed to toggle timer");
+    } finally {
+      // Reset processing state after a small delay to prevent double-clicks
+      setTimeout(() => {
+        setIsProcessingTimerAction(false);
+      }, 500);
+    }
+  };
+
+  // Add new function to handle revealing answers
+  const handleRevealAnswer = async () => {
+    try {
+      if (!quiz || !quiz.questions || !currentQuestion) {
+        toast.error("Question data not available");
+        return;
+      }
+      
+      console.log("Before revealing answer - Quiz structure:", JSON.stringify({
+        hasQuestions: !!quiz.questions,
+        questionsLength: quiz.questions ? quiz.questions.length : 0,
+        currentIndex: currentQuestionIndex
+      }));
+      
+      const questionId = currentQuestion.id;
+      
+      // Important: Don't update the entire question, just the specific fields we need to change
+      // This prevents overwriting or losing the questions array
+      
+      // 1. Set showCorrectAnswer to true for this question (use specific path)
+      const showCorrectAnswerPath = `quizzes/${quizId}/questions/${currentQuestionIndex}/showCorrectAnswer`;
+      await set(ref(db, showCorrectAnswerPath), true);
+      
+      // 2. Trigger submission of all pending answers with a separate field
+      // Use a different path to avoid overwriting the question data
+      const submitAnswersPath = `quizzes/${quizId}/pendingAnswerSubmissions/${questionId}`;
+      await set(ref(db, submitAnswersPath), {
+        submitPendingAnswers: true,
+        submissionTimestamp: serverTimestamp()
       });
       
-      // Also update legacy timer for backward compatibility
-      await update(ref(db, `quizzes/${quizId}`), {
-        timer: remainingSeconds,
-        timerRunning: false
-      });
-    
-      // Update local state immediately
-      setTimerRunning(false);
-    
-      toast.success('Timer stopped');
+      // 3. Refresh quiz data after revealing answers to maintain structure integrity
+      const quizRef = ref(db, `quizzes/${quizId}`);
+      const snapshot = await get(quizRef);
+      
+      if (snapshot.exists()) {
+        const refreshedQuizData = snapshot.val();
+        // Update local state with refreshed data
+        setQuiz(refreshedQuizData);
+        
+        console.log("After revealing answer - Quiz refreshed:", 
+          "Questions count:", refreshedQuizData.questions ? refreshedQuizData.questions.length : 0,
+          "Questions type:", refreshedQuizData.questions ? (Array.isArray(refreshedQuizData.questions) ? "Array" : typeof refreshedQuizData.questions) : "undefined");
+      }
+      
+      toast.success(currentQuestion.type === "fill-in-blank" 
+        ? "Answer revealed and all answers submitted" 
+        : "Correct answer revealed to participants");
     } catch (error) {
-      console.error("Error stopping timer:", error);
-      toast.error("Failed to stop timer");
+      console.error("Error revealing answer:", error);
+      toast.error("Failed to reveal answer");
     }
   };
 
@@ -398,14 +563,29 @@ export default function QuizController({ quizId }) {
     );
   }
 
-  const currentQuestion = quiz.questions[currentQuestionIndex];
-  const isLastQuestion = currentQuestionIndex === quiz.questions.length - 1;
+  // Enhanced debugging for quiz data structure
+  console.log("Current Question Index:", currentQuestionIndex);
+  console.log("Total Questions:", quiz.questions ? quiz.questions.length : 0);
+  console.log("Quiz questions array:", quiz.questions ? typeof quiz.questions : "undefined");
+  
+  // Defensive check for questions array - prevent errors if structure changes
+  if (!quiz.questions || !Array.isArray(quiz.questions)) {
+    console.error("Cannot determine question count - questions array is invalid");
+  }
+
+  const currentQuestion = quiz.questions ? quiz.questions[currentQuestionIndex] : null;
+  // Enhanced check for last question with multiple validations
+  const isLastQuestion = quiz.questions && Array.isArray(quiz.questions) && quiz.questions.length > 0 
+    ? currentQuestionIndex >= quiz.questions.length - 1 
+    : false;
+  
+  console.log("Is Last Question (Enhanced check):", isLastQuestion);
 
   const renderHeader = () => (
     <div className="p-4 bg-gradient-to-r from-primary to-secondary text-white flex justify-between items-center rounded-t-lg shadow-md">
       <h1 className="text-xl font-bold">{quiz.title}</h1>
       <div className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full shadow-inner">
-        Question {currentQuestionIndex + 1} of {quiz.questions.length}
+        Question {currentQuestionIndex + 1} of {quiz.questions && Array.isArray(quiz.questions) ? quiz.questions.length : '?'}
       </div>
     </div>
   );
@@ -659,7 +839,7 @@ export default function QuizController({ quizId }) {
                         <div className="mt-4 p-4 rounded-lg border-2 border-gray-200">
                           <div className="flex items-center">
                             <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-semibold mr-2">
-                              Fill in the blank
+                              Identification
                             </div>
                             <span className="text-lg">{currentQuestion.correctAnswer}</span>
                           </div>
@@ -747,21 +927,50 @@ export default function QuizController({ quizId }) {
                   />
                   
                   {/* Manual timer controls for host */}
-                  <div className="flex space-x-2 mt-2">
+                  <div className="flex flex-wrap justify-center gap-2 mt-2">
                     <Button 
                       onClick={() => startTimer(currentQuestion.timer || 30)} 
-                      className="bg-primary text-white px-4 py-2"
-                      disabled={timerRunning}
+                      className="bg-primary text-white px-4 py-2" 
+                      disabled={isProcessingTimerAction}
                     >
                       Restart Timer
                     </Button>
-                    <Button 
-                      onClick={stopTimer} 
-                      className="bg-red-500 text-white px-4 py-2" 
-                      disabled={!timerRunning}
-                    >
-                      Stop Timer
-                    </Button>
+                    
+                    {/* Reveal Answer button - available for all question types */}
+                    {currentQuestion && (
+                      <div className="relative">
+                        <Button 
+                          onClick={handleRevealAnswer} 
+                          className={`${timerRunning ? "bg-gray-400 cursor-not-allowed opacity-70" : "bg-green-600 hover:bg-green-700"} text-white px-4 py-2 flex items-center transition`}
+                          disabled={timerRunning}
+                          title={timerRunning 
+                            ? "Wait for timer to expire before revealing answers" 
+                            : `Reveal the correct answer${currentQuestion.type === "fill-in-blank" ? " and submit all participants' answers" : ""}`
+                          }
+                        >
+                          <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            className="h-5 w-5 mr-2" 
+                            fill="none" 
+                            viewBox="0 0 24 24" 
+                            stroke="currentColor"
+                          >
+                            <path 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round" 
+                              strokeWidth={2} 
+                              d="M13 10V3L4 14h7v7l9-11h-7z" 
+                            />
+                          </svg>
+                          Reveal Answer
+                        </Button>
+                        {timerRunning && (
+                          <div className="absolute -bottom-6 left-0 right-0 text-xs text-center text-gray-500">
+                            Timer must finish first
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 

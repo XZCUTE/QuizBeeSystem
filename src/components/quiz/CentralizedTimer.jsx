@@ -16,6 +16,7 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
   // Timer state
   const [timeLeft, setTimeLeft] = useState(initialTime);
   const [isActive, setIsActive] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [timerEndTime, setTimerEndTime] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
   
@@ -58,13 +59,20 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
           // Update the timer state immediately
           setTimerEndTime(endTime);
           setIsActive(true);
+          setIsPaused(false);
           
           // Start the local countdown
           startLocalCountdown(endTime);
         } else if (!timerData.isActive) {
           // Timer is paused or stopped
           setIsActive(false);
-          setTimeLeft(timerData.duration || initialTime);
+          
+          // Check if timer is paused (has pausedRemaining or duration)
+          const isPausedTimer = timerData.pausedAt && 
+                               (timerData.pausedRemaining > 0 || timerData.duration > 0);
+          
+          setIsPaused(isPausedTimer);
+          setTimeLeft(timerData.pausedRemaining || timerData.duration || initialTime);
           
           // Clear any running countdown
           if (intervalRef.current) {
@@ -75,6 +83,7 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
       } else {
         // Initialize timer with default values if no data exists
         setIsActive(false);
+        setIsPaused(false);
         setTimeLeft(initialTime);
         
         // Clear any running countdown
@@ -150,12 +159,20 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
           // Always update the timer when there's a change
           setTimerEndTime(endTime);
           setIsActive(true);
+          setIsPaused(false);
           
           // Start or update the local countdown
           startLocalCountdown(endTime);
         } else if (!timerData.isActive) {
           // Timer is paused or stopped
           setIsActive(false);
+          
+          // Check if timer is paused (has pausedRemaining or duration)
+          const isPausedTimer = timerData.pausedAt && 
+                               (timerData.pausedRemaining > 0 || timerData.duration > 0);
+          
+          setIsPaused(isPausedTimer);
+          
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
@@ -163,12 +180,13 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
           
           // Update the time left with the duration from Firebase
           if (timerData.duration !== undefined) {
-            setTimeLeft(timerData.duration);
+            setTimeLeft(timerData.pausedRemaining || timerData.duration);
           }
         }
       } else {
         // No timer data exists
         setIsActive(false);
+        setIsPaused(false);
         setTimeLeft(initialTime);
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -277,50 +295,54 @@ export default function CentralizedTimer({ quizId, questionId, initialTime = 30,
     };
   }, []);
 
+  // Visual display of the timer
   return (
-    <div className="flex flex-col items-center justify-center">
-      <div className="flex items-center justify-center">
-        <motion.div 
-          animate={{ scale: timeLeft < 10 && isActive ? [1, 1.1, 1] : 1 }}
-          transition={{ duration: 0.5, repeat: timeLeft < 10 && isActive ? Infinity : 0 }}
-          className={`flex items-center text-4xl font-bold ${
-            !isActive ? "text-gray-500" : 
-            timeLeft < 10 ? "text-red-500" : "text-primary"
-          } ${!isActive ? 'opacity-75' : ''}`}
-        >
-          <span className="text-6xl font-bold">{timeLeft}</span>
-          {!isActive && (
-            <span className="text-sm ml-1 opacity-80">
-              (paused)
-            </span>
-          )}
-        </motion.div>
-      </div>
-      
-      {/* Progress bar indicator */}
-      <div className="w-full h-2 my-2 bg-gray-200 rounded-full overflow-hidden">
-        <motion.div 
-          className={`h-full ${
-            !isActive ? "bg-gray-400" : 
-            timeLeft < 10 ? "bg-red-500" : "bg-primary"
-          }`}
-          initial={{ width: "100%" }}
-          animate={{ width: `${percentage}%` }}
-          transition={{ duration: 0.25 }}
-        />
-      </div>
-      
-      {/* Auto-sync indicator - smaller and more subtle */}
-      <div 
-        className="text-xs text-gray-400 flex items-center gap-1 mt-1"
-        onClick={() => syncWithServer(false)}
-      >
-        {isSyncing ? "Syncing..." : (
-          <>
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-            <span>Synced</span>
-          </>
+    <div className="w-full max-w-sm mx-auto">
+      <div className="mb-1 text-center">
+        {isSyncing ? (
+          <span className="text-xs text-gray-500">Syncing timer...</span>
+        ) : (
+          <span className="text-xs text-gray-500">
+            {isActive ? "Timer running" : isPaused ? "Timer paused" : "Timer stopped"}
+          </span>
         )}
+      </div>
+      
+      <div className="relative h-8 bg-gray-200 rounded-full overflow-hidden">
+        {/* Timer progress bar */}
+        <motion.div 
+          className={`absolute left-0 top-0 h-full ${
+            isPaused 
+              ? "bg-yellow-500 animate-pulse" 
+              : percentage <= 20 
+                ? "bg-red-500" 
+                : percentage <= 60 
+                  ? "bg-yellow-500" 
+                  : "bg-green-500"
+          }`}
+          initial={{ width: `${percentage}%` }}
+          animate={{ width: `${percentage}%` }}
+          transition={{ duration: 0.3 }}
+          style={{ 
+            width: `${percentage}%` 
+          }}
+        />
+        
+        {/* Time remaining text */}
+        <div className={`absolute inset-0 flex items-center justify-center font-bold ${
+          percentage <= 20 ? "text-white" : "text-gray-800"
+        }`}>
+          {isPaused ? (
+            <span className="flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {timeLeft}s (PAUSED)
+            </span>
+          ) : (
+            `${timeLeft}s`
+          )}
+        </div>
       </div>
     </div>
   );

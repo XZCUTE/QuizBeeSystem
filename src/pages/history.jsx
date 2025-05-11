@@ -4,6 +4,7 @@ import { db } from "@/firebase/config";
 import { ref, get } from "firebase/database";
 import Button from "@/components/Button";
 import toast from "react-hot-toast";
+import * as XLSX from 'xlsx';
 
 export default function History() {
   const [searchParams] = useSearchParams();
@@ -69,10 +70,35 @@ export default function History() {
 
         // Get participants data
         if (quiz.participants) {
+          // Create an array of participant objects with their basic info
           const participantsArray = Object.keys(quiz.participants).map(key => ({
             id: key,
             ...quiz.participants[key]
           }));
+
+          // Get the questions array
+          const questions = quiz.questions || [];
+          
+          // For each participant, get their answers and calculate correct answers count
+          for (const participant of participantsArray) {
+            let correctAnswersCount = 0;
+            
+            // For each question, check if the participant answered correctly
+            for (const question of questions) {
+              const answerRef = ref(db, `quizzes/${quizCode}/answers/${question.id}/${participant.id}`);
+              const answerSnapshot = await get(answerRef);
+              
+              if (answerSnapshot.exists()) {
+                const answerData = answerSnapshot.val();
+                if (answerData.isCorrect) {
+                  correctAnswersCount++;
+                }
+              }
+            }
+            
+            // Add the correct answers count to the participant object
+            participant.correctAnswers = correctAnswersCount;
+          }
 
           setParticipants(participantsArray);
 
@@ -177,6 +203,180 @@ export default function History() {
     window.print();
   };
 
+  // New function for Excel export - All participants summary
+  const exportToExcelSummary = () => {
+    try {
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      
+      // Prepare data for export
+      const summaryData = [
+        // Header row with merged cells for the title
+        ["ICCT QUIZBEE SUMMARY REPORT"],
+        [""],  // Empty row for spacing
+        ["Quiz Title:", quizData?.title || "Quiz History"],
+        ["Date Generated:", new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString()],
+        ["Total Participants:", participants.length.toString()],
+        ["Teams:", teams.length.toString()],
+        [""],  // Empty row for spacing
+        // Column headers
+        ["Team Name", "Participant Name", "Total Score", "Total Correct Answers", "Total Questions", "Percentage Score"]
+      ];
+      
+      // Add data rows
+      participants.forEach(participant => {
+        // Calculate percentage score
+        const totalScore = participant.score || 0;
+        const correctAnswers = participant.correctAnswers || 0;
+        const totalQuestions = quizData?.questions?.length || 0;
+        const percentageScore = totalQuestions ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
+        
+        summaryData.push([
+          participant.team || "No Team",
+          participant.name,
+          totalScore.toString(),
+          correctAnswers.toString(),
+          totalQuestions.toString(),
+          percentageScore + "%"
+        ]);
+      });
+      
+      // Create worksheet
+      const ws = XLSX.utils.aoa_to_sheet(summaryData);
+      
+      // Set column widths
+      const colWidths = [
+        { wch: 20 }, // Team Name
+        { wch: 25 }, // Participant Name
+        { wch: 15 }, // Total Score
+        { wch: 20 }, // Total Correct Answers
+        { wch: 20 }, // Total Questions
+        { wch: 20 }  // Percentage Score
+      ];
+      ws['!cols'] = colWidths;
+      
+      // Merge cells for title header
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } } // Merge first row across all columns
+      ];
+      
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Summary Report");
+      
+      // Generate Excel file and trigger download
+      const fileName = `ICCT_QuizBee_Summary_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      toast.success("Summary report exported successfully!");
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      toast.error("Failed to export summary report");
+    }
+  };
+  
+  // New function for Excel export - Individual participant
+  const exportToExcelParticipantReport = () => {
+    if (!selectedParticipant || !participantHistory) {
+      toast.error("Please select a participant first");
+      return;
+    }
+    
+    try {
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      
+      // Prepare data headers
+      const reportData = [
+        ["ICCT QUIZBEE PARTICIPANT REPORT"],
+        [""],  // Empty row for spacing
+        ["Participant:", selectedParticipant.name],
+        ["Team:", selectedParticipant.team || "No Team"],
+        ["Quiz Title:", quizData?.title || "Quiz History"],
+        ["Date Generated:", new Date().toLocaleDateString() + " " + new Date().toLocaleTimeString()],
+        ["Total Score:", (participantHistory?.totalPoints || 0).toString()],
+        ["Correct Answers:", `${participantHistory?.correctAnswersCount || 0} of ${participantHistory?.totalQuestions || 0}`],
+        [""],  // Empty row for spacing
+        // Column headers
+        ["Question", "Selected Answer", "Correct Answer", "Result", "Score"]
+      ];
+      
+      // Add data rows for each question
+      quizData?.questions?.forEach((question, index) => {
+        const history = participantHistory.questions[question.id];
+        if (!history) return;
+        
+        // Format the selected answer based on question type
+        let formattedAnswer = "Not answered";
+        if (history.answer !== null) {
+          if (question.type === "multiple-choice" || question.type === "true-false") {
+            // Map numeric index back to letter option
+            const optionLetters = ["A", "B", "C", "D"];
+            formattedAnswer = optionLetters[history.answer] || history.answer;
+            
+            // Add the text of the selected option if available
+            if (question.options && question.options[history.answer]) {
+              formattedAnswer += ` - ${question.options[history.answer]}`;
+            }
+          } else if (question.type === "fill-in-blank") {
+            formattedAnswer = history.answer;
+          }
+        }
+        
+        // Format the correct answer
+        let correctAnswer = "";
+        if (question.type === "multiple-choice" || question.type === "true-false") {
+          const optionLetters = ["A", "B", "C", "D"];
+          correctAnswer = optionLetters[question.correctAnswer] || question.correctAnswer;
+          
+          // Add the text of the correct option if available
+          if (question.options && question.options[question.correctAnswer]) {
+            correctAnswer += ` - ${question.options[question.correctAnswer]}`;
+          }
+        } else if (question.type === "fill-in-blank") {
+          correctAnswer = question.correctAnswer;
+        }
+        
+        reportData.push([
+          question.text,
+          formattedAnswer,
+          correctAnswer,
+          history.isCorrect ? "Correct" : "Incorrect",
+          `${history.scoreEarned} / ${question.points || 100}`
+        ]);
+      });
+      
+      // Create worksheet
+      const ws = XLSX.utils.aoa_to_sheet(reportData);
+      
+      // Set column widths
+      const colWidths = [
+        { wch: 40 }, // Question
+        { wch: 30 }, // Selected Answer
+        { wch: 30 }, // Correct Answer
+        { wch: 15 }, // Result
+        { wch: 15 }  // Score
+      ];
+      ws['!cols'] = colWidths;
+      
+      // Merge cells for title header
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } } // Merge first row across all columns
+      ];
+      
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Participant Report");
+      
+      // Generate Excel file and trigger download
+      const fileName = `ICCT_QuizBee_${selectedParticipant.name.replace(/\s+/g, '_')}_Report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      toast.success("Participant report exported successfully!");
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      toast.error("Failed to export participant report");
+    }
+  };
+
   const handleBack = () => {
     // If a participant is selected, go back to participant list
     if (selectedParticipant) {
@@ -243,21 +443,32 @@ export default function History() {
         ))}
       </div>
       
-      {/* Enhanced Print-only header that will appear on printed pages */}
-      <div className="hidden print:block print-header">
-        <img src="/icon.svg" alt="ICCT Logo" className="logo" />
-        <h1>ICCT Quiz Bee System - History Report</h1>
-        <p>{quizData?.title || "Quiz History"}</p>
+      {/* Enhanced Print-only layout that will appear on printed pages */}
+      <div className="hidden print:block">
+        {/* Clean header for print */}
+        <div className="print-header">
+          <img src="https://i.imgur.com/7OSw7In.png" alt="ICCT Logo" className="logo" />
+          <h1>ICCT QUIZ BEE SYSTEM</h1>
+          <p>History Report</p>
+        </div>
         
+        <hr style={{ border: "1px solid #000", margin: "20px 0" }} />
+        
+        {/* Report metadata */}
         <div className="report-meta">
+          <div>
+            <span className="report-meta-label">Quiz Title:</span>
+            <span>{quizData?.title || "Quiz History"}</span>
+          </div>
           <div>
             <span className="report-meta-label">Date Generated:</span>
             <span>{new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</span>
           </div>
+          
           {selectedParticipant && (
             <>
               <div>
-                <span className="report-meta-label">Participant:</span>
+                <span className="report-meta-label">Participant Name:</span>
                 <span>{selectedParticipant.name}</span>
               </div>
               <div>
@@ -265,7 +476,7 @@ export default function History() {
                 <span>{selectedParticipant.team || "No Team"}</span>
               </div>
               <div>
-                <span className="report-meta-label">Score:</span>
+                <span className="report-meta-label">Total Score:</span>
                 <span>{participantHistory?.totalPoints || 0} points</span>
               </div>
               <div>
@@ -274,6 +485,7 @@ export default function History() {
               </div>
             </>
           )}
+          
           {!selectedParticipant && (
             <>
               <div>
@@ -288,76 +500,14 @@ export default function History() {
               )}
             </>
           )}
-        </div>
       </div>
       
-      {/* Main content */}
-      <div className="relative z-20 min-h-screen">
-        <div className="container mx-auto px-4 py-4">
-          {/* Header with page title */}
-          <div className="text-center py-6">
-            <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
-            <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>
-              ICCT Quiz Bee System
-            </h1>
-            <h2 className="text-xl text-gray-200">Quiz History</h2>
-          </div>
-
-          {/* Main content area */}
-          <div className="max-w-6xl mx-auto pb-20 print:p-0">
-            {/* Header with navigation - hidden when printing */}
-            <div className="flex items-center justify-between mb-6 print:hidden">
-              <Button 
-                onClick={handleBack}
-                className="flex items-center gap-2 bg-white/80 text-primary border-2 border-primary/50 px-4 py-2 rounded-lg font-bold shadow-md hover:bg-white hover:shadow-lg transition-all"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-                Back
-              </Button>
-              
-              <Button
-                onClick={handlePrintReport}
-                className="flex items-center gap-2 bg-gradient-to-r from-primary to-secondary text-white px-4 py-2 rounded-lg font-bold shadow-md hover:shadow-lg transition-all"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
-                </svg>
-                Print Report
-              </Button>
-            </div>
+        {/* Print content - either participant history or summary */}
+        {selectedParticipant && participantHistory ? (
+          <>
+            <div className="print-title">Individual Participant Report</div>
             
-            {/* Quiz title */}
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-4 mb-6 print:hidden">
-              <h2 className="text-xl font-semibold">{quizData?.title || "Quiz History"}</h2>
-              <p className="text-gray-600">
-                Total Participants: {participants.length}
-                {teams.length > 0 && ` • Teams: ${teams.length}`}
-              </p>
-            </div>
-            
-            {/* Participant history or participants list */}
-            {selectedParticipant && participantHistory ? (
-              <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                {/* Participant details header */}
-                <div className="bg-gradient-to-r from-primary to-secondary p-4 text-white print:bg-white print:text-black">
-                  <h2 className="text-xl font-semibold">{selectedParticipant.name}</h2>
-                  <p>Team: {selectedParticipant.team || "No Team"}</p>
-                  <div className="mt-2 flex items-center gap-3">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      Correct: {participantHistory.correctAnswersCount}/{participantHistory.totalQuestions}
-                    </span>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      Total Points: {participantHistory.totalPoints}
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Questions and answers - Enhanced for print */}
-                <div className="divide-y divide-gray-200">
-                  {/* Print-only table header */}
-                  <table className="hidden print:table print-answer-table">
+            <table>
                     <thead>
                       <tr>
                         <th width="5%">No.</th>
@@ -423,8 +573,135 @@ export default function History() {
                       </tr>
                     </tfoot>
                   </table>
+          </>
+        ) : (
+          <>
+            <div className="print-title">Quiz Summary Report</div>
+            
+            <table>
+              <thead>
+                <tr>
+                  <th>Team Name</th>
+                  <th>Participant Name</th>
+                  <th>Total Score</th>
+                  <th>Correct Answers</th>
+                  <th>Percentage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {participants
+                  .filter(p => !selectedTeam || p.team === selectedTeam)
+                  .map(participant => {
+                    // Calculate percentage
+                    const totalQuestions = quizData?.questions?.length || 0;
+                    const correctAnswers = participant.correctAnswers || 0;
+                    const percentageScore = totalQuestions ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
+                    
+                    return (
+                      <tr key={participant.id}>
+                        <td>{participant.team || "No Team"}</td>
+                        <td>{participant.name}</td>
+                        <td>{participant.score || 0}</td>
+                        <td>{participant.correctAnswers || 0} / {quizData?.questions?.length || 0}</td>
+                        <td>{percentageScore}%</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </>
+        )}
+        
+        <hr style={{ border: "1px solid #000", margin: "20px 0" }} />
+        
+        {/* Footer with page information */}
+        <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '10pt' }}>
+          <p>ICCT Quiz Bee System © {new Date().getFullYear()}</p>
+        </div>
+      </div>
+      
+      {/* Main content */}
+      <div className="relative z-20 min-h-screen">
+        <div className="container mx-auto px-4 py-4">
+          {/* Header with page title */}
+          <div className="text-center py-6">
+            <img src="https://i.imgur.com/7OSw7In.png" className="mb-6 h-24 mx-auto animate-float" alt="ICCT School Logo" />
+            <h1 className="text-3xl font-bold mb-6 text-center text-white" style={{ textShadow: '0 0 10px #06BEE1' }}>
+              ICCT Quiz Bee System
+            </h1>
+            <h2 className="text-xl text-gray-200">Quiz History</h2>
+          </div>
 
-                  {/* Screen-only detailed view (hidden in print) */}
+          {/* Main content area */}
+          <div className="max-w-6xl mx-auto pb-20 print:p-0">
+            {/* Header with navigation - hidden when printing */}
+            <div className="flex items-center justify-between mb-6 print:hidden">
+              <Button 
+                onClick={handleBack}
+                className="flex items-center gap-2 bg-white/80 text-primary border-2 border-primary/50 px-4 py-2 rounded-lg font-bold shadow-md hover:bg-white hover:shadow-lg transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Back
+              </Button>
+              
+              <div className="flex gap-2">
+                <Button
+                  onClick={selectedParticipant ? exportToExcelParticipantReport : exportToExcelSummary}
+                  className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow-md hover:bg-green-700 hover:shadow-lg transition-all"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  Export to Excel
+                </Button>
+                
+                <Button
+                  onClick={handlePrintReport}
+                  className="flex items-center gap-2 bg-gradient-to-r from-primary to-secondary text-white px-4 py-2 rounded-lg font-bold shadow-md hover:shadow-lg transition-all"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
+                  </svg>
+                  Print Report
+                </Button>
+              </div>
+            </div>
+            
+            {/* Quiz title */}
+            <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-4 mb-6 print:hidden">
+              <h2 className="text-xl font-semibold">{quizData?.title || "Quiz History"}</h2>
+              <p className="text-gray-600">
+                Total Participants: {participants.length}
+                {teams.length > 0 && ` • Teams: ${teams.length}`}
+              </p>
+            </div>
+            
+            {/* Participant history or participants list */}
+            {selectedParticipant && participantHistory ? (
+              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                {/* Participant details header */}
+                <div className="bg-gradient-to-r from-primary to-secondary p-4 text-white print:hidden">
+                  <h2 className="text-xl font-semibold">
+                    {selectedParticipant.name}
+                  </h2>
+                  <p>
+                    Team: {selectedParticipant.team || "No Team"}
+                  </p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      Correct: {participantHistory.correctAnswersCount}/{participantHistory.totalQuestions}
+                    </span>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Total Points: {participantHistory.totalPoints}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Questions and answers - Enhanced for print */}
+                <div className="divide-y divide-gray-200">
+                  {/* Print-only table header - Remove since we have a dedicated print layout */}
                   <div className="print:hidden">
                     {quizData?.questions?.map((question, index) => {
                       const history = participantHistory.questions[question.id];
@@ -581,14 +858,17 @@ export default function History() {
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-gray-50">
                             <tr>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider print:text-black">
                                 Name
                               </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider print:text-black">
                                 Team
                               </th>
-                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider print:text-black">
                                 Score
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider print:text-black">
+                                Correct Answers
                               </th>
                               <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider print:hidden">
                                 Actions
@@ -604,13 +884,16 @@ export default function History() {
                                   className="hover:bg-gray-50 transition-colors"
                                 >
                                   <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="font-medium text-gray-900">{participant.name}</div>
+                                    <div className="font-medium text-gray-900 print:text-black">{participant.name}</div>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-gray-500">{participant.team || "No Team"}</div>
+                                    <div className="text-gray-500 print:text-black">{participant.team || "No Team"}</div>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="text-gray-500">{participant.score || 0}</div>
+                                    <div className="text-gray-500 print:text-black">{participant.score || 0}</div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="text-gray-500 print:text-black">{participant.correctAnswers || 0} / {quizData?.questions?.length || 0}</div>
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-right print:hidden">
                                     <Button 

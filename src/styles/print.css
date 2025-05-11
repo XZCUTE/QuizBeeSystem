@@ -1,6 +1,20 @@
 /* Print styles for the Quiz History page */
 
 @media print {
+  /* Reset all elements to basic defaults for printing */
+  * {
+    background: transparent !important;
+    color: black !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    border-color: #888 !important;
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
   /* Hide elements that shouldn't be printed */
   .print\:hidden {
     display: none !important;
@@ -11,42 +25,116 @@
     display: block !important;
   }
   
-  /* Reset some styles for better print layout */
+  /* Reset body for printing */
   body {
     background: white !important;
-    font-size: 11pt;
+    font-size: 12pt;
     color: black !important;
     font-family: 'Arial', sans-serif;
     line-height: 1.5;
+    margin: 0;
+    padding: 0;
   }
   
-  /* Remove shadows, backgrounds and borders for cleaner print */
-  .print\:shadow-none {
+  /* Remove all background particles and decorative elements */
+  .absolute, .fixed, .animate-float, [class*="particle"], [class*="bg-primary"] {
+    display: none !important;
+  }
+  
+  /* Print margins */
+  @page {
+    margin: 1.5cm;
+    size: portrait;
+  }
+  
+  /* Clear all decorative styles */
+  .bg-gradient-to-r,
+  .bg-gradient-to-br,
+  .from-primary,
+  .to-secondary,
+  .rounded-lg, 
+  .rounded-md, 
+  .rounded-xl,
+  .shadow-md,
+  .shadow-lg {
+    background: white !important;
+    background-image: none !important;
     box-shadow: none !important;
+    border-radius: 0 !important;
   }
   
-  .print\:bg-white {
-    background-color: white !important;
+  /* Redesigned print header */
+  .print-header {
+    display: block !important;
+    text-align: left;
+    margin-bottom: 30px;
+    border-bottom: 2px solid #000;
+    padding-bottom: 15px;
+    position: relative;
+    min-height: 80px;
   }
   
-  .print\:border-black {
-    border-color: black !important;
+  .print-header .logo {
+    max-height: 70px;
+    max-width: 70px;
+    display: inline-block;
+    float: left;
+    margin-right: 20px;
+    object-fit: contain;
   }
   
-  /* Make text black for better contrast in print */
-  .print\:text-black {
+  .print-header h1 {
+    font-size: 20pt;
+    margin-bottom: 5px;
+    color: black !important;
+    font-weight: bold;
+  }
+  
+  .print-header p {
+    font-size: 14pt;
+    margin-bottom: 10px;
     color: black !important;
   }
   
-  /* Ensure tables have proper borders when printed */
+  /* Report metadata box */
+  .report-meta {
+    border: 1px solid #333;
+    padding: 15px;
+    margin-bottom: 30px;
+    margin-top: 20px;
+    background-color: white !important;
+    color: black !important;
+    page-break-inside: avoid;
+    clear: both;
+  }
+  
+  .report-meta div {
+    margin-bottom: 8px;
+    color: black !important;
+  }
+  
+  .report-meta-label {
+    font-weight: bold;
+    display: inline-block;
+    width: 160px;
+    color: black !important;
+  }
+  
+  .report-meta span {
+    color: black !important;
+  }
+  
+  /* Clean table styles */
   table {
-    border-collapse: collapse;
     width: 100%;
-    margin-bottom: 20px;
+    border-collapse: collapse;
+    margin-bottom: 30px;
+    page-break-inside: avoid;
   }
   
   table, th, td {
     border: 1px solid #333;
+    color: black !important;
   }
   
   th {
@@ -54,158 +142,67 @@
     font-weight: bold;
     padding: 10px 8px;
     text-align: left;
+    color: black !important;
   }
   
   td {
     padding: 8px;
     text-align: left;
+    color: black !important;
   }
   
   tr:nth-child(even) {
     background-color: #f9f9f9 !important;
   }
   
-  /* Add page breaks where needed */
-  .print\:break-before-page {
-    break-before: page;
-  }
-  
-  .print\:break-after-page {
-    break-after: page;
-  }
-  
-  /* Ensure backgrounds and colors print properly */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  
-  /* Format headers nicely for print */
-  h1 {
-    font-size: 18pt;
-    margin-bottom: 10pt;
-    text-align: center;
-    border-bottom: 2px solid #333;
-    padding-bottom: 10px;
-  }
-  
-  h2 {
-    font-size: 16pt;
-    margin-bottom: 8pt;
-    color: #333 !important;
-  }
-  
-  h3 {
-    font-size: 14pt;
-    margin-bottom: 6pt;
-    color: #333 !important;
-  }
-  
-  /* Margins for the printed page */
-  @page {
-    margin: 1.5cm;
-    size: portrait;
-  }
-  
-  /* Make sure the content is not cut off */
-  .print\:w-full {
-    width: 100% !important;
-  }
-  
-  .print\:m-0 {
-    margin: 0 !important;
-  }
-  
-  .print\:p-0 {
-    padding: 0 !important;
-  }
-  
-  .print\:overflow-visible {
-    overflow: visible !important;
-  }
-  
-  /* Specific styles for report header */
-  .print-header {
-    display: none;
-  }
-  
-  .print-header {
-    display: block !important;
-    text-align: center;
-    margin-bottom: 20px;
-  }
-  
-  .print-header h1 {
-    font-size: 20pt;
-    margin-bottom: 5px;
-    border-bottom: none;
-  }
-  
-  .print-header p {
-    font-size: 12pt;
-    margin-bottom: 20px;
-  }
-  
-  .print-header .logo {
-    max-height: 70px;
-    margin: 0 auto 10px;
-    display: block;
-  }
-  
-  .report-meta {
-    border: 1px solid #333;
-    padding: 10px;
-    margin-bottom: 20px;
-    background-color: #f9f9f9 !important;
-  }
-  
-  .report-meta div {
-    margin-bottom: 5px;
-  }
-  
-  .report-meta-label {
+  tfoot td {
     font-weight: bold;
-    display: inline-block;
-    width: 150px;
+    background-color: #f2f2f2 !important;
   }
   
-  /* Override rounded styles to make cleaner tables */
-  .rounded-lg, .rounded-md, .rounded-xl {
-    border-radius: 0 !important;
-  }
-  
-  /* Clean answer style */
-  .print-answer-table th, 
-  .print-answer-table td {
-    padding: 6px 10px;
-    font-size: 10pt;
-  }
-  
-  /* Reset gradients to solid colors */
-  .from-primary, 
-  .to-secondary, 
-  .bg-gradient-to-r,
-  .bg-gradient-to-br {
-    background: white !important;
-    color: black !important;
-  }
-  
-  .text-green-600, .text-green-800, .text-red-600, .text-red-800 {
-    font-weight: bold;
-  }
-  
+  /* Simple alternate styling for correct/incorrect */
   .text-green-600, .text-green-800 {
-    color: #008000 !important;
+    color: black !important;
+    font-weight: bold;
   }
   
   .text-red-600, .text-red-800 {
-    color: #cc0000 !important;
+    color: black !important;
+    text-decoration: line-through;
   }
   
-  /* Make all quiz questions and answers appear in a clean list format */
-  .print-questions-list {
+  /* Print title */
+  .print-title {
+    font-size: 20pt;
+    font-weight: bold;
+    text-align: center;
+    margin: 20px 0 25px 0;
+    padding-bottom: 15px;
+    color: black !important;
+    border-bottom: 2px solid #333;
+    clear: both;
+  }
+  
+  /* Clean print-only participant details */
+  .print-participant-details {
+    margin-bottom: 20px;
     page-break-inside: avoid;
-    margin-bottom: 5mm;
+    border: 1px solid #333;
+    padding: 15px;
+    background-color: white !important;
+  }
+  
+  /* Ensure all text elements are visible */
+  p, h1, h2, h3, h4, h5, h6, span, div, td, th {
+    color: black !important;
+  }
+  
+  /* Force page breaks where needed */
+  .print\:break-before-page {
+    page-break-before: always;
+  }
+  
+  .print\:break-after-page {
+    page-break-after: always;
   }
 } 
