@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "@/firebase/config";
 import { ref, onValue, get } from "firebase/database";
@@ -9,6 +9,9 @@ import { FaTrophy, FaMedal, FaStar, FaUsers, FaUserAlt } from "react-icons/fa";
 import QuizQuestion from "@/components/quiz/QuizQuestion";
 import EnhancedLeaderboard from "@/components/quiz/EnhancedLeaderboard";
 import usePreventQuizExit from "@/hooks/usePreventQuizExit";
+import ReactConfetti from "react-confetti";
+import { useWindowSize } from "react-use";
+import { AnimatePresence, motion } from "framer-motion";
 
 export default function Audience() {
   const navigate = useNavigate();
@@ -24,6 +27,8 @@ export default function Audience() {
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const { width, height } = useWindowSize();
 
   // Prevent page exit when actively viewing a quiz (improved condition)
   const isActiveViewing = (step === "viewing-leaderboard" && quiz?.status === "active") || step === "viewing-quiz";
@@ -256,6 +261,23 @@ export default function Audience() {
     return () => unsubscribe();
   }, [quizCode, step]);
 
+  useEffect(() => {
+    if (quiz?.status === "completed" && !showCelebration) {
+      setShowCelebration(true);
+      // Play celebration sound if appropriate
+      const celebrationSound = new Audio("/sounds/celebration.mp3");
+      celebrationSound.volume = 0.5;
+      celebrationSound.play().catch(err => console.log("Audio playback error:", err));
+      
+      // Hide celebration after some time
+      const timer = setTimeout(() => {
+        setShowCelebration(false);
+      }, 15000); // 15 seconds of celebration
+      
+      return () => clearTimeout(timer);
+    }
+  }, [quiz?.status, showCelebration]);
+
   const handleSubmitCode = async () => {
     if (!quizCode) {
       toast.error("Please enter a quiz code");
@@ -332,6 +354,54 @@ export default function Audience() {
           />
         ))}
       </div>
+      
+      {/* Celebration Effects */}
+      <AnimatePresence>
+        {showCelebration && (
+          <>
+            {/* Confetti */}
+            <ReactConfetti
+              width={width}
+              height={height}
+              recycle={true}
+              numberOfPieces={500}
+              gravity={0.15}
+              colors={['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4']}
+            />
+            
+            {/* Fireworks animation */}
+            <div className="fixed inset-0 z-50 pointer-events-none">
+              {[...Array(10)].map((_, i) => (
+                <motion.div
+                  key={i}
+                  className="absolute"
+                  initial={{ 
+                    x: Math.random() * width, 
+                    y: height, 
+                    scale: 0 
+                  }}
+                  animate={{ 
+                    y: Math.random() * height * 0.7,
+                    scale: 1,
+                    opacity: [0, 1, 0]
+                  }}
+                  transition={{ 
+                    duration: 2 + Math.random() * 3,
+                    delay: i * 0.3,
+                    repeat: 2,
+                    repeatType: "reverse"
+                  }}
+                >
+                  <div className="firework" style={{ 
+                    '--color': `hsl(${Math.random() * 360}, 100%, 50%)`,
+                    '--size': `${30 + Math.random() * 70}px`
+                  }}></div>
+                </motion.div>
+              ))}
+            </div>
+          </>
+        )}
+      </AnimatePresence>
       
       {/* Main content */}
       <div className="relative z-20 min-h-screen">

@@ -1004,11 +1004,6 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
       {/* Identification input field */}
       {question.type === "fill-in-blank" && (
         <div className="mt-4">
-          <div className="mb-2">
-            <div className="bg-primary/10 text-primary px-3 py-1 inline-block rounded-full text-sm font-semibold mb-2">
-              Identification
-            </div>
-          </div>
           <div className="relative">
             <input
               type="text"

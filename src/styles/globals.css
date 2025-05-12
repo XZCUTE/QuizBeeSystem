@@ -400,3 +400,94 @@
 .animation-delay-300 { animation-delay: 0.3s; }
 .animation-delay-400 { animation-delay: 0.4s; }
 .animation-delay-500 { animation-delay: 0.5s; }
+
+/* Fireworks Animation for Celebrations */
+@keyframes firework-explosion {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.firework {
+  position: absolute;
+  width: var(--size, 50px);
+  height: var(--size, 50px);
+  transform-origin: center;
+  animation: firework-explosion 0.8s ease-out forwards;
+}
+
+.firework::before, .firework::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle, var(--color, #ff0) 0%, transparent 70%),
+    radial-gradient(circle at 25% 25%, var(--color, #ff0) 0%, transparent 50%),
+    radial-gradient(circle at 75% 25%, var(--color, #ff0) 0%, transparent 50%),
+    radial-gradient(circle at 25% 75%, var(--color, #ff0) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, var(--color, #ff0) 0%, transparent 50%);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--color, #ff0), 0 0 20px var(--color, #ff0);
+  mix-blend-mode: screen;
+}
+
+.firework::after {
+  transform: rotate(45deg);
+}
+
+/* Trophy shine animation - enhanced for celebrations */
+@keyframes trophy-shine {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.trophy-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.trophy-shine::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.5),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: trophy-shine 2s infinite;
+}
+
+/* Utility classes */
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-float {
+  animation: pulse-float 8s ease-in-out infinite;
+}
+
+.animate-pulse-float-reverse {
+  animation: pulse-float-reverse 7s ease-in-out infinite;
+}
+
+.animate-pulse-float-slow {
+  animation: pulse-float-slow 10s ease-in-out infinite;
+}

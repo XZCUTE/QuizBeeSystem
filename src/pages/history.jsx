@@ -196,13 +196,13 @@ export default function History() {
             };
           } else {
             // Standard format for multiple choice
-            answersData[question.id] = {
-              question,
-              answer: answerData.answer,
+          answersData[question.id] = {
+            question,
+            answer: answerData.answer,
               isCorrect: answerData.isCorrect || false,
-              scoreEarned: answerData.score || 0,
+            scoreEarned: answerData.score || 0,
               submittedAt: answerData.submittedAt || null
-            };
+          };
           }
         } else {
           // If no answer found, the participant didn't answer this question
