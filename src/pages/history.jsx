@@ -142,6 +142,7 @@ export default function History() {
       
       // Get all questions from the quiz
       const questions = quizData.questions || [];
+      console.log("Quiz questions:", questions);
       
       // Get all answers for this participant
       const answersData = {};
@@ -153,13 +154,56 @@ export default function History() {
         
         if (answerSnapshot.exists()) {
           const answerData = answerSnapshot.val();
-          answersData[question.id] = {
-            question,
-            answer: answerData.answer,
-            isCorrect: answerData.isCorrect,
-            scoreEarned: answerData.score || 0,
-            submittedAt: answerData.submittedAt
-          };
+          console.log(`Found answer for question ${question.id}:`, answerData);
+          
+          if (question.type === "fill-in-blank") {
+            // Special handling for identification questions
+            let finalAnswer;
+            let isCorrect = false;
+            let scoreEarned = 0;
+            let submittedAt = null;
+            
+            // Check if answer is a direct value (number or string) instead of object
+            if (typeof answerData === 'number' || 
+                (typeof answerData === 'string' && !answerData.hasOwnProperty('answer'))) {
+              console.log(`Direct answer value found: ${answerData}, type: ${typeof answerData}`);
+              finalAnswer = answerData;
+              
+              // Determine if the answer is correct
+              const answerStr = String(answerData).toLowerCase().trim();
+              const correctAnswerStr = String(question.correctAnswer).toLowerCase().trim();
+              isCorrect = answerStr === correctAnswerStr;
+              
+              // Set score if correct
+              scoreEarned = isCorrect ? (question.points || 100) : 0;
+              
+              // Assume submitted (this is a direct value)
+              submittedAt = Date.now();
+            } else {
+              // Standard object form
+              finalAnswer = answerData.answer;
+              isCorrect = answerData.isCorrect || false;
+              scoreEarned = answerData.score || 0;
+              submittedAt = answerData.submittedAt || null;
+            }
+            
+            answersData[question.id] = {
+              question,
+              answer: finalAnswer,
+              isCorrect,
+              scoreEarned,
+              submittedAt
+            };
+          } else {
+            // Standard format for multiple choice
+            answersData[question.id] = {
+              question,
+              answer: answerData.answer,
+              isCorrect: answerData.isCorrect || false,
+              scoreEarned: answerData.score || 0,
+              submittedAt: answerData.submittedAt || null
+            };
+          }
         } else {
           // If no answer found, the participant didn't answer this question
           answersData[question.id] = {
@@ -171,6 +215,8 @@ export default function History() {
           };
         }
       }
+      
+      console.log("Final processed answers data:", answersData);
       
       // Calculate total points earned
       const totalPoints = Object.values(answersData).reduce(
@@ -318,7 +364,19 @@ export default function History() {
               formattedAnswer += ` - ${question.options[history.answer]}`;
             }
           } else if (question.type === "fill-in-blank") {
-            formattedAnswer = history.answer;
+            // For identification questions, handle different types of values
+            if (history.answer === '') {
+              formattedAnswer = "No answer";
+            } else {
+              // Convert numbers to strings for display
+              const answerValue = typeof history.answer === 'number' ? 
+                String(history.answer) : history.answer;
+                
+              // Add status info if needed (not submitted)
+              formattedAnswer = history.submittedAt ? 
+                answerValue : 
+                `${answerValue} (Didn't save answer)`;
+            }
           }
         }
         
@@ -535,7 +593,19 @@ export default function History() {
                               formattedAnswer += ` - ${question.options[history.answer]}`;
                             }
                           } else if (question.type === "fill-in-blank") {
-                            formattedAnswer = history.answer;
+                            // For identification questions, handle different types of values
+                            if (history.answer === '') {
+                              formattedAnswer = "No answer";
+                            } else {
+                              // Convert numbers to strings for display
+                              const answerValue = typeof history.answer === 'number' ? 
+                                String(history.answer) : history.answer;
+                                
+                              // Add status info if needed (not submitted)
+                              formattedAnswer = history.submittedAt ? 
+                                answerValue : 
+                                `${answerValue} (Didn't save answer)`;
+                            }
                           }
                         }
                         
@@ -558,6 +628,7 @@ export default function History() {
                             <td>{index + 1}</td>
                             <td>{question.text}</td>
                             <td className={history.isCorrect ? "text-green-600" : "text-red-600"}>
+                              {console.log(`Print view - Question ${question.id}: answer=${history.answer}, type=${typeof history.answer}, submitted=${!!history.submittedAt}`)}
                               {formattedAnswer}
                             </td>
                             <td className="text-green-600">{correctAnswer}</td>
@@ -720,7 +791,19 @@ export default function History() {
                             formattedAnswer += ` - ${question.options[history.answer]}`;
                           }
                         } else if (question.type === "fill-in-blank") {
-                          formattedAnswer = history.answer;
+                          // For identification questions, handle different types of values
+                          if (history.answer === '') {
+                            formattedAnswer = "No answer";
+                          } else {
+                            // Convert numbers to strings for display
+                            const answerValue = typeof history.answer === 'number' ? 
+                              String(history.answer) : history.answer;
+                              
+                            // Add status info if needed (not submitted)
+                            formattedAnswer = history.submittedAt ? 
+                              answerValue : 
+                              `${answerValue} (Didn't save answer)`;
+                          }
                         }
                       }
                       

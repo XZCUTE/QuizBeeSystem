@@ -198,6 +198,21 @@ export default function QuizController({ quizId }) {
       // Get refreshed quiz data
       const refreshedQuizData = snapshot.val();
       
+      // Ensure questions is an array before proceeding
+      if (refreshedQuizData.questions && !Array.isArray(refreshedQuizData.questions)) {
+        console.log("[handleNextQuestion] Converting questions from object to array");
+        
+        // Convert questions from object to array if Firebase transformed it
+        refreshedQuizData.questions = Object.values(refreshedQuizData.questions);
+        
+        // Update the database with the corrected array structure
+        await update(ref(db, `quizzes/${quizId}`), {
+          questions: refreshedQuizData.questions
+        });
+        
+        console.log("[handleNextQuestion] Questions structure fixed in database");
+      }
+      
       // Validate questions array exists and is an array
       if (!refreshedQuizData.questions || !Array.isArray(refreshedQuizData.questions)) {
         console.error("[handleNextQuestion] Invalid questions array in quiz data");
@@ -423,31 +438,31 @@ export default function QuizController({ quizId }) {
         return;
       }
       
-      const timerData = snapshot.val();
+        const timerData = snapshot.val();
       
       // If timer is active (running), we need to pause it
       if (timerData.isActive) {
         // Calculate remaining seconds
-        const currentTime = Date.now();
-        const elapsedSeconds = Math.floor((currentTime - timerData.startTime) / 1000);
+          const currentTime = Date.now();
+          const elapsedSeconds = Math.floor((currentTime - timerData.startTime) / 1000);
         const remainingSeconds = Math.max(0, timerData.duration - elapsedSeconds);
-        
-        // Update the timer to inactive but preserve the remaining time
+      
+      // Update the timer to inactive but preserve the remaining time
         await update(timerRef, {
-          isActive: false,
+        isActive: false,
           duration: remainingSeconds,
           pausedAt: Date.now(),
           pausedRemaining: remainingSeconds // Store for resuming
-        });
-        
-        // Also update legacy timer for backward compatibility
-        await update(ref(db, `quizzes/${quizId}`), {
-          timer: remainingSeconds,
-          timerRunning: false
-        });
+      });
       
-        // Update local state immediately
-        setTimerRunning(false);
+      // Also update legacy timer for backward compatibility
+      await update(ref(db, `quizzes/${quizId}`), {
+        timer: remainingSeconds,
+        timerRunning: false
+      });
+    
+      // Update local state immediately
+      setTimerRunning(false);
         setTimerPaused(true);
       
         toast.success('Timer paused');
@@ -508,33 +523,27 @@ export default function QuizController({ quizId }) {
       
       const questionId = currentQuestion.id;
       
-      // Important: Don't update the entire question, just the specific fields we need to change
-      // This prevents overwriting or losing the questions array
-      
-      // 1. Set showCorrectAnswer to true for this question (use specific path)
-      const showCorrectAnswerPath = `quizzes/${quizId}/questions/${currentQuestionIndex}/showCorrectAnswer`;
-      await set(ref(db, showCorrectAnswerPath), true);
-      
-      // 2. Trigger submission of all pending answers with a separate field
-      // Use a different path to avoid overwriting the question data
+      // 1. First trigger submission of all pending answers
       const submitAnswersPath = `quizzes/${quizId}/pendingAnswerSubmissions/${questionId}`;
       await set(ref(db, submitAnswersPath), {
         submitPendingAnswers: true,
         submissionTimestamp: serverTimestamp()
       });
       
-      // 3. Refresh quiz data after revealing answers to maintain structure integrity
-      const quizRef = ref(db, `quizzes/${quizId}`);
-      const snapshot = await get(quizRef);
+      // 2. Update the specific question directly at its path 
+      // This is more direct and doesn't modify the array structure
+      // Access this question using the questionId within an update operation
+      const questionUpdates = {};
+      questionUpdates[`questions/${currentQuestionIndex}/showCorrectAnswer`] = true;
+      await update(ref(db, `quizzes/${quizId}`), questionUpdates);
       
-      if (snapshot.exists()) {
-        const refreshedQuizData = snapshot.val();
-        // Update local state with refreshed data
-        setQuiz(refreshedQuizData);
-        
-        console.log("After revealing answer - Quiz refreshed:", 
-          "Questions count:", refreshedQuizData.questions ? refreshedQuizData.questions.length : 0,
-          "Questions type:", refreshedQuizData.questions ? (Array.isArray(refreshedQuizData.questions) ? "Array" : typeof refreshedQuizData.questions) : "undefined");
+      // 3. Update local state directly without refreshing from database
+      // This prevents any array-to-object conversion issues
+      const updatedQuiz = { ...quiz };
+      if (Array.isArray(updatedQuiz.questions)) {
+        // Only update the local state if questions is still an array
+        updatedQuiz.questions[currentQuestionIndex].showCorrectAnswer = true;
+        setQuiz(updatedQuiz);
       }
       
       toast.success(currentQuestion.type === "fill-in-blank" 
@@ -573,22 +582,54 @@ export default function QuizController({ quizId }) {
     console.error("Cannot determine question count - questions array is invalid");
   }
 
-  const currentQuestion = quiz.questions ? quiz.questions[currentQuestionIndex] : null;
+  // Calculate if this is the last question more safely
+  const calculateIsLastQuestion = () => {
+    if (!quiz || !quiz.questions) return false;
+    
+    let questionsCount = 0;
+    
+    if (Array.isArray(quiz.questions)) {
+      questionsCount = quiz.questions.length;
+    } else if (typeof quiz.questions === 'object') {
+      questionsCount = Object.keys(quiz.questions).length;
+    }
+    
+    return questionsCount > 0 && currentQuestionIndex >= questionsCount - 1;
+  };
+
+  const currentQuestion = quiz.questions ? (
+    Array.isArray(quiz.questions) 
+      ? quiz.questions[currentQuestionIndex] 
+      : quiz.questions[Object.keys(quiz.questions)[currentQuestionIndex]]
+  ) : null;
+  
   // Enhanced check for last question with multiple validations
-  const isLastQuestion = quiz.questions && Array.isArray(quiz.questions) && quiz.questions.length > 0 
-    ? currentQuestionIndex >= quiz.questions.length - 1 
-    : false;
+  const isLastQuestion = calculateIsLastQuestion();
   
   console.log("Is Last Question (Enhanced check):", isLastQuestion);
 
-  const renderHeader = () => (
+  const renderHeader = () => {
+    // Calculate the total questions safely
+    let totalQuestions = '?';
+    
+    if (quiz && quiz.questions) {
+      if (Array.isArray(quiz.questions)) {
+        totalQuestions = quiz.questions.length;
+      } else if (typeof quiz.questions === 'object') {
+        // If questions is an object (not array), count the keys
+        totalQuestions = Object.keys(quiz.questions).length;
+      }
+    }
+    
+    return (
     <div className="p-4 bg-gradient-to-r from-primary to-secondary text-white flex justify-between items-center rounded-t-lg shadow-md">
       <h1 className="text-xl font-bold">{quiz.title}</h1>
       <div className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full shadow-inner">
-        Question {currentQuestionIndex + 1} of {quiz.questions && Array.isArray(quiz.questions) ? quiz.questions.length : '?'}
+          Question {currentQuestionIndex + 1} of {totalQuestions}
       </div>
     </div>
   );
+  };
 
   if (quizCompleted) {
     return (
@@ -930,7 +971,7 @@ export default function QuizController({ quizId }) {
                   <div className="flex flex-wrap justify-center gap-2 mt-2">
                     <Button 
                       onClick={() => startTimer(currentQuestion.timer || 30)} 
-                      className="bg-primary text-white px-4 py-2" 
+                      className="bg-primary text-white px-4 py-2"
                       disabled={isProcessingTimerAction}
                     >
                       Restart Timer
@@ -939,7 +980,7 @@ export default function QuizController({ quizId }) {
                     {/* Reveal Answer button - available for all question types */}
                     {currentQuestion && (
                       <div className="relative">
-                        <Button 
+                    <Button 
                           onClick={handleRevealAnswer} 
                           className={`${timerRunning ? "bg-gray-400 cursor-not-allowed opacity-70" : "bg-green-600 hover:bg-green-700"} text-white px-4 py-2 flex items-center transition`}
                           disabled={timerRunning}
@@ -963,7 +1004,7 @@ export default function QuizController({ quizId }) {
                             />
                           </svg>
                           Reveal Answer
-                        </Button>
+                    </Button>
                         {timerRunning && (
                           <div className="absolute -bottom-6 left-0 right-0 text-xs text-center text-gray-500">
                             Timer must finish first

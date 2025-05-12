@@ -201,8 +201,34 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
     const correctAnswerListener = onValue(correctAnswerRef, (snapshot) => {
       console.log("Received showCorrectAnswer update:", snapshot.exists() ? snapshot.val() : "does not exist");
       if (snapshot.exists() && snapshot.val() === true) {
+        // Always show the correct answer when the flag is set to true
         setShowCorrectAnswer(true);
         console.log("Showing correct answer for question:", question.id);
+        
+        // For identification questions, if we have a non-submitted answer, make sure it's set as pending
+        if (question.type === "fill-in-blank" && !isAnswerSubmitted && !pendingAnswer && localSelectedAnswer) {
+          // Check if the answer is correct
+          const answerToSubmit = localSelectedAnswer.trim();
+          const isCorrect = answerToSubmit.toLowerCase() === question.correctAnswer.toLowerCase().trim();
+          
+          // Calculate score if correct
+          let score = 0;
+          if (isCorrect) {
+            if (question.difficulty === "tie-breaker") {
+              score = question.points || 500;
+            } else {
+              score = question.points || 1000;
+            }
+          }
+          
+          // Store as a pending answer
+          setPendingAnswer({
+            databaseAnswer: answerToSubmit,
+            isCorrect,
+            score,
+            submissionTime: Date.now()
+          });
+        }
       }
     });
     
@@ -210,7 +236,7 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
       off(timerRef, timerListener);
       off(correctAnswerRef, correctAnswerListener);
     };
-  }, [quizId, question, pendingAnswer, isAnswerSubmitted]);
+  }, [quizId, question, isAnswerSubmitted, pendingAnswer, localSelectedAnswer]);
   
   // This effect ONLY sets up a listener for the CURRENT participant's OWN answers
   useEffect(() => {
@@ -245,39 +271,75 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
       if (snapshot.exists() && snapshot.val().submitPendingAnswers === true) {
         console.log("Participant received submitPendingAnswers signal", pendingAnswer);
         
-        // Only proceed if there's a valid pending answer for fill-in-blank questions
-        if (question.type === "fill-in-blank" && pendingAnswer && !isAnswerSubmitted) {
-          console.log("Submitting pending answer", pendingAnswer);
+        // For identification questions, show the correct answer to all participants
+        if (question.type === "fill-in-blank") {
+          // Always show the correct answer when revealed by host
+          setShowCorrectAnswer(true);
           
-          submitAnswerToDatabase(
-            pendingAnswer.databaseAnswer, 
-            pendingAnswer.isCorrect, 
-            pendingAnswer.score, 
-            pendingAnswer.submissionTime
-          );
-          
-          // Update UI state to reflect the submitted answer
-          setIsAnswerSubmitted(true);
-          
-          // We keep answerLocallyConfirmed as true since it was already confirmed
-          // But we update the UI to show it's now been submitted to the database
-          toast.success(
-            "Your answer has been submitted!",
-            { 
-              duration: 2000,
-              icon: "🚀",
-              style: {
-                borderRadius: '10px',
-                background: '#333',
-                color: '#fff',
-              },
+          // If there's a pending answer and the participant hasn't submitted yet, submit it now
+          if (pendingAnswer && !isAnswerSubmitted) {
+            console.log("Submitting pending answer", pendingAnswer);
+            
+            // Double-check the score calculation for correctness
+            let verifiedScore = pendingAnswer.score;
+            
+            // Additional check to ensure score is correct
+            if (pendingAnswer.isCorrect && verifiedScore <= 0) {
+              console.warn("Correcting score for correct answer that had 0 points");
+              verifiedScore = question.points || 1000;
             }
-          );
-        }
-        // If there's no pending answer or it's not a fill-in-blank question, just acknowledge
-        else if (!pendingAnswer && question.type === "fill-in-blank" && !isAnswerSubmitted) {
-          console.log("No pending answer to submit");
-          // Don't show any error message to the user - this is a normal case for unanswered questions
+            
+            submitAnswerToDatabase(
+              pendingAnswer.databaseAnswer, 
+              pendingAnswer.isCorrect, 
+              verifiedScore, 
+              pendingAnswer.submissionTime
+            );
+            
+            // Update UI state to reflect the submitted answer
+            setIsAnswerSubmitted(true);
+            
+            // Toast notification if there was a substantive answer
+            if (pendingAnswer.databaseAnswer) {
+              toast.success(
+                pendingAnswer.isCorrect 
+                  ? `Correct answer! +${verifiedScore} points` 
+                  : "Your answer has been submitted!",
+                { 
+                  duration: 2000,
+                  icon: pendingAnswer.isCorrect ? "🎯" : "🚀",
+                  style: {
+                    borderRadius: '10px',
+                    background: pendingAnswer.isCorrect ? '#22c55e' : '#333',
+                    color: '#fff',
+                  },
+                }
+              );
+            }
+          } 
+          // If there's no pending answer and the participant hasn't submitted, create and submit a blank answer
+          else if (!pendingAnswer && !isAnswerSubmitted) {
+            console.log("Auto-submitting blank answer");
+            
+            // Create a blank answer
+            const blankAnswer = {
+              databaseAnswer: "",
+              isCorrect: false,
+              score: 0,
+              submissionTime: Date.now()
+            };
+            
+            // Submit the blank answer
+            submitAnswerToDatabase(
+              blankAnswer.databaseAnswer, 
+              blankAnswer.isCorrect, 
+              blankAnswer.score, 
+              blankAnswer.submissionTime
+            );
+            
+            // Update UI state to reflect the submitted answer
+            setIsAnswerSubmitted(true);
+          }
         }
       }
     });
@@ -308,6 +370,14 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
   // Function to send answer data to database (for fill-in-blank)
   const submitAnswerToDatabase = async (databaseAnswer, isCorrect, score, submissionTime) => {
     try {
+      // Validate the score for correct answers - defensive programming
+      if (isCorrect && score <= 0) {
+        console.warn("Correcting invalid score for correct answer:", score);
+        score = question.points || 1000; // Set a proper score if it was incorrectly calculated
+      }
+      
+      console.log(`Submitting answer: "${databaseAnswer}", isCorrect: ${isCorrect}, score: ${score}`);
+      
       // Save answer to database
       const thisParticipantAnswerRef = ref(
         db,
@@ -333,11 +403,15 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
           const currentTotalScore = participantData.score || 0;
           const newTotalScore = currentTotalScore + score;
           
+          console.log(`Updating participant score from ${currentTotalScore} to ${newTotalScore}`);
+          
           // Update the participant's total score
           await update(participantRef, {
             score: newTotalScore,
             lastUpdated: submissionTime
           });
+        } else {
+          console.error("Participant data not found for ID:", participantId);
         }
       }
       
@@ -548,8 +622,56 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
     setAnswerLocked(true);
     setTimerExpired(true);
     
-    // Remove auto-submission of fill-in-blank answers
-    // Now fill-in-blank answers will only be submitted when the host clicks "Reveal Answer"
+    // Auto-submit fill-in-blank answers when the timer expires
+    if (question.type === "fill-in-blank" && !isAnswerSubmitted) {
+      // If the participant typed something but didn't submit, use what they typed
+      // If they didn't type anything, submit a blank answer
+      const answerToSubmit = localSelectedAnswer ? localSelectedAnswer.trim() : "";
+      
+      // Check if the answer is correct using case-insensitive comparison
+      const correctAnswerNormalized = question.correctAnswer.toLowerCase().trim();
+      const userAnswerNormalized = answerToSubmit.toLowerCase().trim();
+      const isCorrect = userAnswerNormalized === correctAnswerNormalized;
+      
+      // Calculate score if correct
+      let score = 0;
+      if (isCorrect) {
+        if (question.difficulty === "tie-breaker") {
+          score = question.points || 500;
+        } else {
+          score = question.points || 1000;
+        }
+      }
+      
+      // Store answer as pending for later submission when host reveals answer
+      setPendingAnswer({
+        databaseAnswer: answerToSubmit,
+        isCorrect,
+        score,
+        submissionTime: Date.now()
+      });
+      
+      // Update UI to show the answer is saved but not submitted yet
+      setAnswerLocallyConfirmed(true);
+      
+      console.log(`Auto-saved answer: "${answerToSubmit}", isCorrect: ${isCorrect}, score: ${score}`);
+      
+      // Show a toast message if they had an answer
+      if (answerToSubmit) {
+        toast.info(
+          "Your answer has been auto-saved and will be submitted when the host reveals the answer.",
+          { 
+            duration: 3000,
+            icon: "🕒",
+            style: {
+              borderRadius: '10px',
+              background: '#333',
+              color: '#fff',
+            },
+          }
+        );
+      }
+    }
   };
 
   // If no question is provided, show a placeholder
