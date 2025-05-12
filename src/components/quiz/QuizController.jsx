@@ -989,20 +989,6 @@ export default function QuizController({ quizId }) {
                             : `Reveal the correct answer${currentQuestion.type === "fill-in-blank" ? " and submit all participants' answers" : ""}`
                           }
                         >
-                          <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            className="h-5 w-5 mr-2" 
-                            fill="none" 
-                            viewBox="0 0 24 24" 
-                            stroke="currentColor"
-                          >
-                            <path 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round" 
-                              strokeWidth={2} 
-                              d="M13 10V3L4 14h7v7l9-11h-7z" 
-                            />
-                          </svg>
                           Reveal Answer
                     </Button>
                         {timerRunning && (
@@ -1017,7 +1003,7 @@ export default function QuizController({ quizId }) {
                 
                 {/* Stats and Participants */}
                 <h3 className="text-lg font-bold mb-4">
-                  {showLeaderboard ? "Leaderboard" : showParticipants ? "Participants" : "Tie-Breakers & Tied Scores"}
+                  {showLeaderboard ? "Real-time Rankings" : showParticipants ? "Participants" : "Tie-Breakers & Tied Scores"}
                 </h3>
                 
                 {selectedTeam && showParticipants && (

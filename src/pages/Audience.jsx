@@ -413,7 +413,7 @@ export default function Audience() {
               ICCT Quiz Bee System
             </h1>
             <h2 className="text-xl text-gray-200">
-              {step === "enter-code" ? "Audience View" : quiz?.title || "Live Leaderboard"}
+              {step === "enter-code" ? "Audience View" : quiz?.title || "Quiz Rankings"}
             </h2>
           </div>
           
@@ -504,7 +504,7 @@ export default function Audience() {
               <div className="p-6">
                 {activeTab === "individual" ? (
                   <>
-                    <h3 className="text-4xl font-bold mb-8 text-center">Individual Leaderboard</h3>
+                    <h3 className="text-4xl font-bold mb-8 text-center">Rankings</h3>
                     
                     {participants.length === 0 ? (
                       <p className="text-2xl text-center py-10">No participants yet</p>
@@ -560,7 +560,7 @@ export default function Audience() {
                   </>
                 ) : (
                   <>
-                    <h3 className="text-4xl font-bold mb-8 text-center">Team Leaderboard</h3>
+                    <h3 className="text-4xl font-bold mb-8 text-center">Teams</h3>
                     
                     {teamScores.length === 0 ? (
                       <p className="text-2xl text-center py-10">No teams yet</p>
@@ -698,7 +698,7 @@ export default function Audience() {
               <div className="p-6">
                 {activeTab === "individual" ? (
                   <>
-                    <h3 className="text-4xl font-bold mb-8 text-center">Individual Leaderboard</h3>
+                    <h3 className="text-4xl font-bold mb-8 text-center">Rankings</h3>
                     
                     {participants.length === 0 ? (
                       <p className="text-2xl text-center py-10">No participants yet</p>
@@ -754,7 +754,7 @@ export default function Audience() {
                   </>
                 ) : (
                   <>
-                    <h3 className="text-4xl font-bold mb-8 text-center">Team Leaderboard</h3>
+                    <h3 className="text-4xl font-bold mb-8 text-center">Teams</h3>
                     
                     {teamScores.length === 0 ? (
                       <p className="text-2xl text-center py-10">No teams yet</p>

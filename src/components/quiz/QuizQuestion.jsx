@@ -1053,15 +1053,18 @@ export default function QuizQuestion({ question, quizId, participantId, isHost }
         <div className="mt-6">
           <Button
             variant="primary"
-            className={`w-full py-3 text-lg ${!localSelectedAnswer || localSelectedAnswer.trim() === "" ? "opacity-50 cursor-not-allowed" : ""}`}
+            className={`w-full py-3 text-lg ${(!localSelectedAnswer || localSelectedAnswer.trim() === "" || answerLocallyConfirmed) ? "opacity-50 cursor-not-allowed" : ""}`}
             onClick={() => handleSubmitAnswer(localSelectedAnswer)}
-            disabled={!localSelectedAnswer || localSelectedAnswer.trim() === ""}
+            disabled={!localSelectedAnswer || localSelectedAnswer.trim() === "" || answerLocallyConfirmed}
           >
             Save Answer
             <ArrowRightIcon className="ml-2 h-5 w-5" />
           </Button>
           <p className="text-xs text-center mt-2 text-gray-500">
-            Your answer will be submitted when the host reveals the answer.
+            {answerLocallyConfirmed 
+              ? "Your answer has been saved and cannot be changed." 
+              : "Your answer will be submitted when the host reveals the answer."
+            }
           </p>
         </div>
       )}

@@ -246,8 +246,6 @@ export default function Leaderboard({ quizId }) {
 
   return (
     <div className="leaderboard p-4">
-      <h2 className="text-2xl font-bold text-center mb-6">Leaderboard</h2>
-      
       {/* Individual rankings */}
       <div className="mb-8">
         <h3 className="text-xl font-semibold mb-3">Individual Rankings</h3>

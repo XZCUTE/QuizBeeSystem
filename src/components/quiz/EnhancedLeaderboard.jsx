@@ -362,10 +362,6 @@ export default function EnhancedLeaderboard({
   // Full view with tabs
   return (
     <div className={`glass-panel p-4 rounded-xl ${animateEntrance ? 'anim-show' : ''}`}>
-      <h2 className="text-2xl font-bold mb-4 text-center bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-        Leaderboard
-      </h2>
-      
       {/* Tab navigation for individual/team views */}
       {showTeams && teamScores.length > 0 && (
         <div className="flex rounded-lg overflow-hidden mb-4 border border-gray-200">
